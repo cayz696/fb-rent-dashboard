@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.logs/
+.pytest_cache/
+*.sql
+backups/
+.DS_Store
+.dev-credentials

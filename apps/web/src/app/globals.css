@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* Токени Obsidian → утиліти Tailwind (bg-surface, text-muted, border-line, …) */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+  --color-inset: var(--surface-inset);
+  --color-line: var(--panel-border);
+  --color-line-hover: var(--panel-border-hover);
+  --color-line-strong: var(--border-strong);
+  --color-divider: var(--divider);
+  --color-main: var(--text-main);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-on-accent: var(--on-accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+}
+
+html, body { background: var(--bg); color: var(--text-main); }
+body { font-family: var(--font-inter), sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+::selection { background: var(--accent-glow); }
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+.panel { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); }
+.kpi-glow { background-image: var(--glow-kpi); }

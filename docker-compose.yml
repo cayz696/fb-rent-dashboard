@@ -1,0 +1,30 @@
+# MVP-1: db, redis, api, web. Далі: worker (RQ), bot (MVP-2), caddy (HTTPS, деплой).
+# Локальна розробка: `docker compose up -d db` + api/web з термінала (див. README).
+services:
+  db:
+    image: postgres:16
+    ports: ["5440:5432"]          # 5432/5433 на цій машині зайняті іншими проєктами
+    env_file: .env
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      retries: 10
+  redis:
+    image: redis:7
+    ports: ["6390:6379"]
+  api:
+    build: ./apps/api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on: { db: { condition: service_healthy } }
+    profiles: ["full"]
+  web:
+    build: ./apps/web
+    ports: ["3010:3010"]
+    depends_on: [api]
+    profiles: ["full"]
+  # bridge НЕ тут — запускається на машині з AdsPower
+volumes:
+  pgdata:

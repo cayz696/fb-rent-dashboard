@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FB Rent — візуальний шаблон адмін-кабінету</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* ===== Design tokens (перенести в tailwind.config як theme.extend) ===== */
+:root{
+  --bg:#0f1012; --surface:#16181b; --surface-2:#1d2024; --surface-3:#23262b; --inset:#15171a;
+  --border:#26292e; --border-strong:#33373d; --divider:#202327;
+  --text:#ece9e2; --text-2:#c9ccd2; --muted:#a3a7ae; --faint:#80858d;
+  --accent:#e8b25c; --accent-hover:#f3cd8a; --on-accent:#0f1012;
+  --link:#9cc2f5;
+  /* стани етапів: [фон, текст] */
+  --st-issued-bg:#1c3326; --st-issued-fg:#8fe0b0;
+  --st-ready-bg:#1d2a3d;  --st-ready-fg:#a9cbf7;
+  --st-check-bg:#2c2a1c;  --st-check-fg:#ecd58e;
+  --st-work-bg:#23262b;   --st-work-fg:#c9ccd2;
+  --st-off-bg:#3a221f;    --st-off-fg:#f3b3a6;
+  --danger:#f0a597; --ok:#6fd49a;
+  --font:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --r-sm:7px; --r:8px; --r-lg:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
+a{color:var(--accent)}a:hover{color:var(--accent-hover)}
+button,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.sr-only{position:absolute;left:-9999px}
+
+.app{display:flex;min-height:100vh}
+.sidebar{width:232px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:24px 16px;display:flex;flex-direction:column;gap:28px;position:sticky;top:0;height:100vh}
+.brand{display:flex;gap:10px;align-items:center;padding:0 8px}
+.brand-mark{width:32px;height:32px;border-radius:var(--r);background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:700}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav a{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:var(--r);color:var(--text-2);text-decoration:none}
+.nav a[aria-current="page"]{background:var(--surface-3);color:var(--text);font-weight:600}
+.nav .count{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.nav .badge{font-family:var(--mono);font-size:12px;background:var(--accent);color:var(--on-accent);padding:1px 7px;border-radius:10px}
+.integrations{margin-top:auto;border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;font-size:12px}
+.integrations div{display:flex;justify-content:space-between}
+.on{color:var(--ok)} .offline{color:var(--danger)}
+
+main{flex:1;min-width:0;padding:28px 32px;display:flex;flex-direction:column;gap:22px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+h1{margin:0;font-size:26px}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.input{height:44px;padding:0 14px;border-radius:var(--r);border:1px solid var(--border-strong);background:var(--surface);width:300px}
+.btn{height:44px;padding:0 16px;border-radius:var(--r);border:1px solid var(--border-strong);background:var(--surface)}
+.btn-primary{border:none;background:var(--accent);color:var(--on-accent);font-weight:600}
+.btn-sm{height:36px;padding:0 12px;border-radius:var(--r-sm);font-size:13px}
+.btn-ghost{background:transparent;color:var(--text-2)}
+.chip{height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--border-strong);background:transparent;color:var(--text-2);font-size:12px}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--text)}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px}
+.panel-title{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.panel-title h2{margin:0;font-size:15px;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.kpi{display:flex;flex-direction:column;gap:6px}
+.kpi .label{font-size:12px;color:var(--muted)}
+.kpi .value{font-size:28px;font-weight:700;font-family:var(--mono)}
+.kpi .sub{font-size:12px;color:var(--text-2)}
+
+.funnel{display:flex;gap:6px;align-items:stretch}
+.stage{flex:1;min-width:0;background:#1f2226;border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:4px;border:none;text-align:left;color:var(--text-2)}
+.stage span:first-child{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage span:last-child{font-size:20px;font-weight:700;font-family:var(--mono)}
+.stage.ready{background:var(--st-ready-bg);color:var(--st-ready-fg)}
+.stage.issued{background:var(--st-issued-bg);color:var(--st-issued-fg)}
+.funnel .sep{width:1px;background:var(--border-strong);margin:0 6px}
+.off-box{width:250px;flex-shrink:0;background:#2a1f1d;border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.off-box span:first-child{font-size:11px;color:var(--danger)}
+.off-box span:last-child{font-size:13px;color:#f3c4ba;font-family:var(--mono)}
+
+.split{display:flex;gap:18px;align-items:flex-start}
+.split > .grow{flex:1;min-width:0}
+.split > .side{width:400px;flex-shrink:0;display:flex;flex-direction:column;gap:18px}
+
+.table{padding:0;overflow:hidden}
+.table .toolbar{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)}
+.table .toolbar h2{margin:0;font-size:15px}
+.trow{display:grid;grid-template-columns:96px 1.3fr 1.1fr .8fr .8fr .9fr .9fr;gap:10px;padding:13px 18px;align-items:center;border-bottom:1px solid var(--divider);color:var(--text);text-decoration:none;font-size:13px}
+.trow:hover{background:var(--surface-2);color:var(--text)}
+.thead{font-size:11px;color:var(--muted);padding:10px 18px;border-bottom:1px solid var(--border)}
+.thead:hover{background:none}
+.pill{display:inline-block;padding:3px 9px;border-radius:10px;font-size:12px}
+.pill.issued{background:var(--st-issued-bg);color:var(--st-issued-fg)}
+.pill.ready{background:var(--st-ready-bg);color:var(--st-ready-fg)}
+.pill.check{background:var(--st-check-bg);color:var(--st-check-fg)}
+.pill.work{background:var(--st-work-bg);color:var(--st-work-fg)}
+.pill.off{background:var(--st-off-bg);color:var(--st-off-fg)}
+.issues{color:var(--danger)}
+.empty-client{color:var(--faint)}
+
+.req{background:var(--surface-2);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.req-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.req-meta span:first-child{color:var(--link)}
+.req-text{font-size:13px;color:var(--text-2);font-style:italic}
+.req-parsed{font-family:var(--mono);font-size:12px;background:var(--inset);border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:3px}
+.req-parsed span:last-child{color:var(--accent)}
+.req-actions{display:flex;gap:6px}
+.req-actions .btn-primary{flex:1}
+
+.signal{display:flex;gap:10px;align-items:flex-start;font-size:13px;margin-bottom:10px}
+.dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+
+/* account view */
+.crumbs{font-size:13px;color:var(--muted)}
+.crumbs a{text-decoration:none}
+.acc-title{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.acc-title h1{font-family:var(--mono);font-size:30px}
+.bars{display:flex;align-items:flex-end;gap:14px;height:150px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;font-size:11px}
+.bar i{display:block;width:100%;border-radius:4px 4px 0 0;background:var(--accent)}
+.bar i.zero{background:#2a2d32}
+.event{display:grid;grid-template-columns:110px 16px 1fr 150px;gap:10px;align-items:center;padding:7px 0;font-size:13px}
+.event .t{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.event .who{font-size:12px;color:var(--muted);text-align:right}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--divider);font-size:13px}
+.kv span:last-child{font-family:var(--mono);text-align:right}
+textarea{width:100%;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--r);padding:10px;resize:vertical}
+.agent{background:var(--surface-2);border:1px solid var(--border-strong)}
+.agent .label{font-size:12px;color:var(--accent);margin-bottom:8px}
+
+[hidden]{display:none!important}
+@media (max-width:1100px){
+  .split{flex-direction:column}.split > .side{width:100%}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .funnel{flex-wrap:wrap}.stage{flex:1 1 90px}.off-box{width:100%}
+}
+@media (max-width:760px){
+  .sidebar{display:none} main{padding:20px 16px}
+  .input{width:100%}
+  .trow{grid-template-columns:90px 1fr 1fr;row-gap:4px}
+  .trow > :nth-child(n+4){display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar" aria-label="Головне меню">
+    <div class="brand"><div class="brand-mark">FR</div><div><div style="font-weight:700;font-size:16px">FB Rent</div><div class="muted" style="font-size:12px">адмін-кабінет</div></div></div>
+    <div class="nav">
+      <a href="#dashboard" data-view="dashboard">Дашборд</a>
+      <a href="#account" data-view="account">Акаунти<span class="count">113</span></a>
+      <a href="#dashboard">Етапи (канбан)</a>
+      <a href="#dashboard">Заявки з Telegram<span class="badge">3</span></a>
+      <a href="#dashboard">Клієнти<span class="count">8</span></a>
+      <a href="#dashboard">Постачальники</a>
+      <a href="#dashboard">Фінанси</a>
+      <a href="#dashboard">Журнал подій</a>
+      <a href="#dashboard">ШІ-агент</a>
+    </div>
+    <div class="integrations">
+      <span class="muted" style="font-size:11px">Інтеграції</span>
+      <div><span>Міст AdsPower</span><span class="on">● онлайн</span></div>
+      <div><span>Clover експорт</span><span class="on">● 14:57</span></div>
+      <div><span>Telegram-бот</span><span class="on">● слухає</span></div>
+    </div>
+  </nav>
+
+  <!-- ===== DASHBOARD ===== -->
+  <main id="view-dashboard">
+    <div class="head">
+      <div><h1>Дашборд</h1><div class="muted" style="font-size:13px;margin-top:4px">Понеділок, 28 вересня. Дані Clover оновлено о 14:57</div></div>
+      <div class="actions">
+        <label for="search" class="sr-only">Пошук</label>
+        <input id="search" class="input" type="search" placeholder="Код, ID кабінету, клієнт…">
+        <button class="btn btn-primary" type="button">+ Додати партію</button>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <section class="panel">
+      <div class="panel-title"><h2>Воронка етапів</h2><span class="muted" style="font-size:12px">клік по етапу відкриває відфільтрований список</span></div>
+      <div class="funnel" id="funnel"></div>
+    </section>
+
+    <div class="split">
+      <section class="panel table grow">
+        <div class="toolbar">
+          <h2>Акаунти</h2>
+          <div class="actions">
+            <button class="chip" aria-pressed="true" type="button">Усі</button>
+            <button class="chip" aria-pressed="false" type="button">Видані</button>
+            <button class="chip" aria-pressed="false" type="button">Готові</button>
+            <button class="chip" aria-pressed="false" type="button">Сигнали</button>
+          </div>
+        </div>
+        <div class="trow thead"><span>Код</span><span>Клієнт</span><span>Етап</span><span>Сьогодні</span><span>Ліміт</span><span>Оголошення</span><span>Загалом</span></div>
+        <div id="rows"></div>
+      </section>
+
+      <div class="side">
+        <section class="panel">
+          <div class="panel-title"><h2>Заявки з Telegram</h2><span class="muted" style="font-size:12px">чекають апруву: 2</span></div>
+          <div id="requests"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-title"><h2>Сигнали</h2></div>
+          <div id="signals"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== ACCOUNT CARD ===== -->
+  <main id="view-account" hidden>
+    <div class="crumbs"><a href="#dashboard">← Дашборд</a> / Акаунти / FB-0147</div>
+    <div class="head">
+      <div class="acc-title"><h1>FB-0147</h1><span class="pill issued" style="font-size:13px;padding:5px 12px">Видано</span><span style="color:var(--text-2)">клієнт <b style="color:var(--text)">«Nord»</b>, з 27 вересня</span></div>
+      <div class="actions">
+        <button class="btn" type="button">Відкрити профіль AdsPower</button>
+        <button class="btn" type="button">Повернути в пул</button>
+        <button class="btn btn-primary" type="button">Змінити етап</button>
+      </div>
+    </div>
+
+    <div class="kpis" id="acc-kpis"></div>
+
+    <div class="split">
+      <div class="grow" style="display:flex;flex-direction:column;gap:18px">
+        <section class="panel">
+          <div class="panel-title"><h2>Спенд за 7 днів</h2><span class="muted" style="font-size:12px">з Clover, зведено до Europe/Kyiv</span></div>
+          <div class="bars" id="bars"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-title"><h2>Журнал подій</h2><span class="muted" style="font-size:12px">кожен перехід етапу з автором</span></div>
+          <div id="events"></div>
+        </section>
+      </div>
+      <div class="side">
+        <section class="panel">
+          <div class="panel-title"><h2>Прив'язки</h2></div>
+          <div id="details"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-title"><h2>Нотатка</h2></div>
+          <label for="note" class="muted" style="font-size:12px;display:block;margin-bottom:8px">Видно лише адмінам</label>
+          <textarea id="note" rows="3">Клієнт просив підняти ліміт після 1 жовтня.</textarea>
+        </section>
+        <section class="panel agent">
+          <div class="label">ШІ-агент пропонує</div>
+          <p style="margin:0 0 10px;font-size:13px;color:var(--text-2)">4 проблемні оголошення з'явились сьогодні. Надіслати клієнту «Nord» повідомлення в Telegram?</p>
+          <div class="req-actions"><button class="btn btn-primary btn-sm" type="button">Переглянути і надіслати</button><button class="btn btn-ghost btn-sm" type="button">Пізніше</button></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ===== Mock data (у продакшні — з API) ===== */
+const kpis=[['Спенд сьогодні','$21.81','по 35 активних кабінетах'],['Активні / всього','35 / 90','у Clover'],['Готові до видачі','6','пройшли перевірку 24 год'],['Заявки в черзі','3','2 чекають апруву']];
+const stages=[['Куплено',3],['AdsPower',2],['БМ',2],['Номер',1],['Прогрів',4],['Карта',2],['Перевірка 24г',3],['Готові',6,'ready'],['Видано',35,'issued']];
+const rows=[
+ ['FB-0147','«Nord»','issued','Видано','$2.74','$136','17',' +4','$1 284'],
+ ['FB-0112','«Vega»','issued','Видано','$9.90','$220','12',' +8','$3 910'],
+ ['FB-0098','«Nord»','issued','Видано','$0.00','$50','6','','$640'],
+ ['FB-0155','—','ready','Готовий','—','$250','0','','—'],
+ ['FB-0158','—','ready','Готовий','—','$250','0','','—'],
+ ['FB-0153','—','check','Перевірка 24г','—','$50','0','','—'],
+ ['FB-0160','—','work','Прогрів','—','—','—','','—'],
+ ['FB-0121','«Atlas»','off','Бан','—','$739','—','','$12 603']];
+const requests=[
+ ['@nord_media','10:42','треба ще 2 кабінети під PL, ліміт 250','Видача: 2 кабінети, гео PL, ліміт $250','FB-0155, FB-0158'],
+ ['@vega_team','09:15','на FB-0112 купа відхилених, дайте заміну','Заміна: FB-0112 на повернення','FB-0161 (перевірка до 18:00)']];
+const signals=[
+ ['FB-0112','8 проблемних оголошень','Clover, 14:57, клієнт «Vega»','var(--danger)'],
+ ['FB-0098','нуль спенду сьогодні, учора $41','Clover, 14:57, клієнт «Nord»','var(--st-check-fg)'],
+ ['FB-0153','перевірка 24 год завершується','сьогодні о 17:30','var(--st-ready-fg)']];
+const accKpis=[['Спенд сьогодні','$2.74','оновлено 14:57'],['Спенд загалом','$1 284','з моменту видачі'],['Ліміт','$136','денний'],['Оголошення','17 +4','4 проблемні']];
+const spend=[['22.09',0],['23.09',0],['24.09',0],['25.09',0],['26.09',0],['27.09',38.2],['28.09',2.74]];
+const events=[
+ ['28.09 14:57','Clover: спенд $2.74, +4 проблемні оголошення','авто, Clover','var(--danger)'],
+ ['27.09 11:20','Видано клієнту «Nord» за заявкою з Telegram','апрув, адмін','var(--st-issued-fg)'],
+ ['27.09 10:05','Перевірку 24 год пройдено','адмін','var(--st-ready-fg)'],
+ ['26.09 09:40','Карту прив\u2019язано (•• 4417)','адмін','var(--text-2)'],
+ ['25.09 18:10','Етап «Прогрів» завершено','адмін','var(--text-2)'],
+ ['23.09 12:30','Номер прив\u2019язано','адмін','var(--text-2)'],
+ ['22.09 16:00','Створено БМ','адмін','var(--text-2)'],
+ ['21.09 10:15','Заведено в AdsPower, профіль створено','авто, міст','var(--text-2)'],
+ ['20.09 19:00','Куплено, партія №14, [ПОСТАЧАЛЬНИК]','адмін','var(--text-2)']];
+const details=[['ID кабінету','65435711028…'],['Бізнес-менеджер','BM-[НАЗВА]'],['Профіль AdsPower','група «Nord», #[ID]'],['Часовий пояс','GMT+3'],['Картка','•• 4417'],['Постачальник','[ПОСТАЧАЛЬНИК], №14'],['Собівартість','[ЦІНА]'],['Умови клієнта','[% від спенду]']];
+
+/* ===== Render ===== */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const kpiHtml=a=>a.map(([l,v,s])=>`<div class="panel kpi"><span class="label">${l}</span><span class="value">${v}</span><span class="sub">${s}</span></div>`).join('');
+$('kpis').innerHTML=kpiHtml(kpis);
+$('acc-kpis').innerHTML=kpiHtml(accKpis);
+$('funnel').innerHTML=stages.map(([n,c,k])=>`<button class="stage ${k||''}" type="button"><span>${n}</span><span>${c}</span></button>`).join('')+
+ `<div class="sep"></div><div class="off-box"><span>Off: 55</span><span>бан 30, резерв 12, пауза 13</span></div>`;
+$('rows').innerHTML=rows.map(r=>`<a class="trow" href="#account"><span class="mono" style="font-weight:500">${r[0]}</span><span class="${r[1]==='—'?'empty-client':''}">${esc(r[1])}</span><span><span class="pill ${r[2]}">${r[3]}</span></span><span class="mono">${r[4]}</span><span class="mono" style="color:var(--text-2)">${r[5]}</span><span class="mono">${r[6]}<span class="issues">${r[7]}</span></span><span class="mono" style="color:var(--text-2)">${r[8]}</span></a>`).join('');
+$('requests').innerHTML=requests.map(q=>`<div class="req"><div class="req-meta"><span>${q[0]}</span><span>${q[1]}</span></div><span class="req-text">«${esc(q[2])}»</span><div class="req-parsed"><span>${esc(q[3])}</span><span>Пропозиція: ${esc(q[4])}</span></div><div class="req-actions"><button class="btn btn-primary btn-sm" type="button">Апрув і видати</button><button class="btn btn-ghost btn-sm" type="button">Змінити</button><button class="btn btn-ghost btn-sm" type="button">Відхилити</button></div></div>`).join('');
+$('signals').innerHTML=signals.map(g=>`<div class="signal"><span class="dot" style="background:${g[3]}"></span><div><div><span class="mono" style="font-weight:500">${g[0]}</span>: ${esc(g[1])}</div><div class="muted" style="font-size:12px">${esc(g[2])}</div></div></div>`).join('');
+$('bars').innerHTML=spend.map(([d,v])=>`<div class="bar"><span class="mono" style="color:var(--text-2)">${v?'$'+v:'—'}</span><i class="${v?'':'zero'}" style="height:${Math.max(3,Math.round(v/40*110))}px"></i><span class="muted">${d}</span></div>`).join('');
+$('events').innerHTML=events.map(e=>`<div class="event"><span class="t">${e[0]}</span><span class="dot" style="background:${e[3]};margin:0;width:10px;height:10px"></span><span>${esc(e[1])}</span><span class="who">${e[2]}</span></div>`).join('');
+$('details').innerHTML=details.map(([k,v])=>`<div class="kv"><span class="muted">${k}</span><span>${esc(v)}</span></div>`).join('');
+
+/* ===== Simple hash routing ===== */
+function route(){
+  const view=location.hash==='#account'?'account':'dashboard';
+  $('view-dashboard').hidden=view!=='dashboard';
+  $('view-account').hidden=view!=='account';
+  document.querySelectorAll('.nav a[data-view]').forEach(a=>{if(a.dataset.view===view)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+  window.scrollTo(0,0);
+}
+addEventListener('hashchange',route);route();
+</script>
+</body>
+</html>

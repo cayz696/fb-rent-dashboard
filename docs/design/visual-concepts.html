@@ -1,0 +1,2426 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FB Rent — 3 Концепти Дизайну (Design Lab)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   THEME DEFINITIONS & DESIGN TOKENS
+   ========================================================================== */
+
+:root {
+  /* Common System Defaults */
+  --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --toast-bg: rgba(18, 20, 26, 0.95);
+}
+
+/* --------------------------------------------------------------------------
+   THEME 1: Obsidian Pro (Linear / Vercel Dark Aesthetic)
+   Precision engineering, ultra-crisp 1px borders, subtle radial glows,
+   sophisticated amber/gold neon accents, developer/pro-buyer tool.
+   -------------------------------------------------------------------------- */
+[data-theme="obsidian"] {
+  --bg: #090a0f;
+  --surface: #101218;
+  --surface-hover: #151821;
+  --surface-active: #1b1f2b;
+  --surface-inset: #0b0d13;
+  --panel-border: rgba(255, 255, 255, 0.07);
+  --panel-border-hover: rgba(255, 255, 255, 0.14);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --divider: rgba(255, 255, 255, 0.05);
+
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --text-faint: #6b7280;
+
+  --accent: #f59e0b;
+  --accent-light: #fbbf24;
+  --accent-glow: rgba(245, 158, 11, 0.18);
+  --on-accent: #090a0f;
+
+  --success: #10b981;
+  --success-bg: rgba(16, 185, 129, 0.12);
+  --success-border: rgba(16, 185, 129, 0.3);
+
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.3);
+
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  --danger-border: rgba(239, 68, 68, 0.3);
+
+  --info: #38bdf8;
+  --info-bg: rgba(56, 189, 248, 0.12);
+  --info-border: rgba(56, 189, 248, 0.3);
+
+  --stage-ready-bg: rgba(56, 189, 248, 0.12);
+  --stage-ready-fg: #7dd3fc;
+  --stage-issued-bg: rgba(16, 185, 129, 0.12);
+  --stage-issued-fg: #6ee7b7;
+  --stage-check-bg: rgba(245, 158, 11, 0.12);
+  --stage-check-fg: #fde68a;
+  --stage-work-bg: rgba(255, 255, 255, 0.05);
+  --stage-work-fg: #d1d5db;
+  --stage-off-bg: rgba(239, 68, 68, 0.12);
+  --stage-off-fg: #fca5a5;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Inter', sans-serif;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  --shadow-panel: 0 4px 24px -2px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--panel-border);
+  --glow-kpi: radial-gradient(circle at 50% 0%, rgba(245, 158, 11, 0.06), transparent 70%);
+}
+
+/* --------------------------------------------------------------------------
+   THEME 2: Mercury FinTech (Executive Dark Slate & Champagne)
+   Premium corporate AdTech/FinTech look (Stripe / Mercury Bank).
+   Rich navy-slate surfaces, champagne gold accents, soft elevated shadows,
+   rounded modern pill badges, elegant typography.
+   -------------------------------------------------------------------------- */
+[data-theme="mercury"] {
+  --bg: #0b0f19;
+  --surface: #111827;
+  --surface-hover: #182235;
+  --surface-active: #1f2c45;
+  --surface-inset: #0c1220;
+  --panel-border: #1f293d;
+  --panel-border-hover: #2e3d57;
+  --border-strong: #2c394f;
+  --divider: #162033;
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+
+  --accent: #e5b869;
+  --accent-light: #f3d499;
+  --accent-glow: rgba(229, 184, 105, 0.22);
+  --on-accent: #0b0f19;
+
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.14);
+  --success-border: rgba(52, 211, 153, 0.35);
+
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.14);
+  --warning-border: rgba(251, 191, 36, 0.35);
+
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.14);
+  --danger-border: rgba(248, 113, 113, 0.35);
+
+  --info: #60a5fa;
+  --info-bg: rgba(96, 165, 250, 0.14);
+  --info-border: rgba(96, 165, 250, 0.35);
+
+  --stage-ready-bg: rgba(96, 165, 250, 0.14);
+  --stage-ready-fg: #93c5fd;
+  --stage-issued-bg: rgba(52, 211, 153, 0.14);
+  --stage-issued-fg: #a7f3d0;
+  --stage-check-bg: rgba(251, 191, 36, 0.14);
+  --stage-check-fg: #fde68a;
+  --stage-work-bg: #1a2233;
+  --stage-work-fg: #cbd5e1;
+  --stage-off-bg: rgba(248, 113, 113, 0.14);
+  --stage-off-fg: #fecaca;
+
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'Fira Code', monospace;
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --shadow-panel: 0 10px 30px -5px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--panel-border);
+  --glow-kpi: linear-gradient(180deg, rgba(229, 184, 105, 0.05) 0%, transparent 100%);
+}
+
+/* --------------------------------------------------------------------------
+   THEME 3: Tactical Cyber Deck (Mission Control / Arbitrage Ops)
+   High-octane mission control room for high-volume media buyers.
+   Pitch-black carbon, neon cyber amber, sharp HUD elements, live pulse telemetry,
+   maximum situational awareness and instant triage.
+   -------------------------------------------------------------------------- */
+[data-theme="tactical"] {
+  --bg: #040508;
+  --surface: #0a0d14;
+  --surface-hover: #101520;
+  --surface-active: #161e2f;
+  --surface-inset: #06080d;
+  --panel-border: #1a2333;
+  --panel-border-hover: #2b3952;
+  --border-strong: #28374d;
+  --divider: #121824;
+
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+
+  --accent: #ffb800;
+  --accent-light: #ffc933;
+  --accent-glow: rgba(255, 184, 0, 0.3);
+  --on-accent: #040508;
+
+  --success: #00e676;
+  --success-bg: rgba(0, 230, 118, 0.12);
+  --success-border: rgba(0, 230, 118, 0.4);
+
+  --warning: #ff9100;
+  --warning-bg: rgba(255, 145, 0, 0.12);
+  --warning-border: rgba(255, 145, 0, 0.4);
+
+  --danger: #ff385c;
+  --danger-bg: rgba(255, 56, 92, 0.14);
+  --danger-border: rgba(255, 56, 92, 0.45);
+
+  --info: #00f0ff;
+  --info-bg: rgba(0, 240, 255, 0.12);
+  --info-border: rgba(0, 240, 255, 0.4);
+
+  --stage-ready-bg: rgba(0, 240, 255, 0.12);
+  --stage-ready-fg: #66f5ff;
+  --stage-issued-bg: rgba(0, 230, 118, 0.12);
+  --stage-issued-fg: #69f0ae;
+  --stage-check-bg: rgba(255, 145, 0, 0.12);
+  --stage-check-fg: #ffab40;
+  --stage-work-bg: #101622;
+  --stage-work-fg: #cfd8dc;
+  --stage-off-bg: rgba(255, 56, 92, 0.14);
+  --stage-off-fg: #ff8a80;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Outfit', 'Space Grotesk', sans-serif;
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-panel: 0 0 0 1px var(--panel-border), 0 8px 32px rgba(0,0,0,0.8);
+  --glow-kpi: radial-gradient(circle at 100% 0%, rgba(255, 184, 0, 0.08), transparent 60%);
+}
+
+/* ==========================================================================
+   RESET & CORE TYPOGRAPHY
+   ========================================================================== */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+  overflow-x: hidden;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button { cursor: pointer; border: none; background: none; }
+
+.mono { font-family: var(--font-mono); font-feature-settings: "tnum" 1; }
+.display-font { font-family: var(--font-display); }
+
+/* ==========================================================================
+   PERSISTENT TOP CONTROL BAR (THEME SWITCHER & LAB HEADER)
+   ========================================================================== */
+
+.design-lab-bar {
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  background: rgba(9, 10, 15, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.lab-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lab-badge {
+  background: linear-gradient(135deg, #f59e0b, #ec4899);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.lab-title span {
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+
+.theme-switcher-group {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 3px;
+  gap: 4px;
+}
+
+.theme-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  color: #9ca3af;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.theme-tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.theme-tab-btn.active {
+  background: #fff;
+  color: #090a0f;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.theme-tab-btn .dot-preview {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.theme-tab-btn[data-set-theme="obsidian"] .dot-preview { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.theme-tab-btn[data-set-theme="mercury"] .dot-preview { background: #38bdf8; box-shadow: 0 0 8px #38bdf8; }
+.theme-tab-btn[data-set-theme="tactical"] .dot-preview { background: #00e676; box-shadow: 0 0 8px #00e676; }
+
+.lab-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+  font-size: 12px;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.view-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* Concept Description Banner */
+.concept-description-banner {
+  background: var(--surface-inset);
+  border-bottom: 1px solid var(--panel-border);
+  padding: 10px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.concept-description-banner strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.concept-tags {
+  display: flex;
+  gap: 8px;
+}
+
+.concept-tag {
+  background: var(--surface);
+  border: 1px solid var(--panel-border);
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+/* ==========================================================================
+   LAYOUT STRUCTURE
+   ========================================================================== */
+
+.app-container {
+  display: flex;
+  min-height: calc(100vh - 90px);
+}
+
+/* Sidebar */
+.sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  position: sticky;
+  top: 50px;
+  height: calc(100vh - 50px);
+  transition: var(--transition);
+  z-index: 50;
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 24px 8px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.brand-logo-box {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 16px;
+  box-shadow: 0 4px 12px var(--accent-glow);
+  letter-spacing: -0.5px;
+}
+
+.brand-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  color: var(--text-main);
+}
+
+.brand-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* Navigation items */
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 20px;
+  flex: 1;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 13px;
+  transition: var(--transition);
+}
+
+.nav-link-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-link svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2;
+  opacity: 0.7;
+  transition: var(--transition);
+}
+
+.nav-link:hover {
+  background: var(--surface-hover);
+  color: var(--text-main);
+}
+
+.nav-link:hover svg {
+  opacity: 1;
+  stroke: var(--accent);
+}
+
+.nav-link.active {
+  background: var(--surface-active);
+  color: var(--text-main);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--panel-border-hover);
+}
+
+.nav-link.active svg {
+  opacity: 1;
+  stroke: var(--accent);
+}
+
+.nav-badge-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 12px;
+}
+
+.nav-count {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+/* Sidebar Live Health Widget */
+.sidebar-telemetry {
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.telemetry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+  font-weight: 700;
+}
+
+.telemetry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.telemetry-item-name {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.telemetry-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  position: relative;
+}
+
+.pulse-dot.online {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+}
+
+.pulse-dot.online::after {
+  content: '';
+  position: absolute;
+  top: -2px; left: -2px; right: -2px; bottom: -2px;
+  border-radius: 50%;
+  border: 1px solid var(--success);
+  animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 1; }
+  70% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* ==========================================================================
+   MAIN WORKSPACE CONTENT AREA
+   ========================================================================== */
+
+.main-content {
+  flex: 1;
+  min-width: 0;
+  padding: 28px 36px 60px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+}
+
+/* Top Action Header */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-title-group h1 {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--accent);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Form Controls & Buttons */
+.search-wrapper {
+  position: relative;
+  width: 290px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  stroke: var(--text-faint);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 36px 0 36px;
+  border-radius: var(--radius);
+  border: 1px solid var(--panel-border);
+  background: var(--surface);
+  color: var(--text-main);
+  font-size: 13px;
+  transition: var(--transition);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.search-shortcut {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  padding: 2px 5px;
+}
+
+.btn {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: var(--transition);
+  border: 1px solid var(--panel-border);
+  background: var(--surface);
+  color: var(--text-main);
+}
+
+.btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--panel-border-hover);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: var(--on-accent);
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
+/* ==========================================================================
+   KPIS GRID TILES
+   ========================================================================== */
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-panel);
+  transition: var(--transition);
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 100%;
+  background: var(--glow-kpi);
+  pointer-events: none;
+}
+
+.kpi-card:hover {
+  border-color: var(--panel-border-hover);
+  transform: translateY(-2px);
+}
+
+.kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kpi-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.kpi-icon-wrap {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.kpi-icon-wrap svg {
+  width: 16px;
+  height: 16px;
+}
+
+.kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.kpi-value {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  letter-spacing: -1px;
+  color: var(--text-main);
+}
+
+.kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.kpi-trend.positive {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.kpi-trend.warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.kpi-footer {
+  font-size: 12px;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================================================
+   PIPELINE / FUNNEL COMPONENT
+   ========================================================================== */
+
+.panel-container {
+  background: var(--surface);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--divider);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-header-title h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+}
+
+.panel-header-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Funnel Stepper Design */
+.funnel-wrapper {
+  padding: 16px 20px;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.funnel-step {
+  flex: 1;
+  min-width: 82px;
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: var(--transition);
+  position: relative;
+  text-align: left;
+}
+
+.funnel-step:hover {
+  background: var(--surface-hover);
+  border-color: var(--panel-border-hover);
+  transform: translateY(-2px);
+}
+
+.step-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step-counter {
+  font-size: 20px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--text-main);
+  letter-spacing: -0.5px;
+}
+
+.funnel-step.ready {
+  background: var(--stage-ready-bg);
+  border-color: var(--stage-ready-fg);
+}
+.funnel-step.ready .step-label { color: var(--stage-ready-fg); }
+.funnel-step.ready .step-counter { color: var(--stage-ready-fg); }
+
+.funnel-step.issued {
+  background: var(--stage-issued-bg);
+  border-color: var(--stage-issued-fg);
+}
+.funnel-step.issued .step-label { color: var(--stage-issued-fg); }
+.funnel-step.issued .step-counter { color: var(--stage-issued-fg); }
+
+.funnel-divider {
+  width: 1px;
+  background: var(--divider);
+  margin: 0 4px;
+}
+
+.off-stats-box {
+  min-width: 220px;
+  background: var(--stage-off-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.off-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--stage-off-fg);
+}
+
+.off-breakdown {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   2-COLUMN MAIN CONTENT SPLIT (TABLE + SIDE WIDGETS)
+   ========================================================================== */
+
+.content-split {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+/* Table Toolbar & Filter Chips */
+.table-filter-chips {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.chip-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.chip-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-main);
+}
+
+.chip-btn.active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+/* Data Table Styling */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.data-table th {
+  padding: 12px 18px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+  background: var(--surface-inset);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.data-table td {
+  padding: 13px 18px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--divider);
+  transition: background 0.15s ease;
+  vertical-align: middle;
+}
+
+.data-table tr.clickable-row {
+  cursor: pointer;
+}
+
+.data-table tr.clickable-row:hover td {
+  background: var(--surface-hover);
+}
+
+/* Badges & Pills */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-pill.issued { background: var(--stage-issued-bg); color: var(--stage-issued-fg); border: 1px solid rgba(16, 185, 129, 0.25); }
+.status-pill.ready  { background: var(--stage-ready-bg); color: var(--stage-ready-fg); border: 1px solid rgba(56, 189, 248, 0.25); }
+.status-pill.check  { background: var(--stage-check-bg); color: var(--stage-check-fg); border: 1px solid rgba(245, 158, 11, 0.25); }
+.status-pill.work   { background: var(--stage-work-bg); color: var(--stage-work-fg); border: 1px solid var(--panel-border); }
+.status-pill.off    { background: var(--stage-off-bg); color: var(--stage-off-fg); border: 1px solid var(--danger-border); }
+
+.account-code-cell {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-mini-btn {
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 2px;
+  color: var(--text-faint);
+}
+
+.clickable-row:hover .copy-mini-btn {
+  opacity: 1;
+}
+
+.copy-mini-btn:hover {
+  color: var(--text-main);
+}
+
+.client-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.client-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--surface-active);
+  border: 1px solid var(--panel-border);
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.issues-tag {
+  color: var(--danger);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--danger-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+/* ==========================================================================
+   SIDE WIDGETS: TELEGRAM REQUESTS & SIGNALS
+   ========================================================================== */
+
+.side-widgets-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Request Cards */
+.requests-list {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.request-card {
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: var(--transition);
+}
+
+.request-card:hover {
+  border-color: var(--panel-border-hover);
+  background: var(--surface);
+}
+
+.req-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.req-sender {
+  font-weight: 700;
+  color: var(--info);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.req-time {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.req-quote {
+  font-size: 12.5px;
+  color: var(--text-main);
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 2px solid var(--accent);
+  padding: 6px 10px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-style: italic;
+}
+
+.req-ai-parsed {
+  background: var(--surface);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 11.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.req-ai-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.req-ai-proposal {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.req-buttons-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.req-buttons-row .btn-primary {
+  flex: 1;
+}
+
+/* Signals Feed */
+.signals-list {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.signal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.signal-row:hover {
+  background: var(--surface-inset);
+}
+
+.signal-dot-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.signal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+}
+
+.signal-title {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.signal-title strong {
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+.signal-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+/* ==========================================================================
+   VIEW 2: SLIDE-OVER ACCOUNT DETAIL DRAWER / MODAL
+   ========================================================================== */
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: none;
+  justify-content: flex-end;
+  animation: fadeIn 0.2s ease;
+}
+
+.drawer-backdrop.active {
+  display: flex;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.drawer-panel {
+  width: 620px;
+  max-width: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--panel-border);
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 28px;
+  gap: 24px;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.7);
+  animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.drawer-acc-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.drawer-acc-code-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.drawer-acc-code {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.drawer-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  transition: var(--transition);
+}
+
+.drawer-close-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-main);
+}
+
+/* 7-Day Spend Bar Chart */
+.spend-chart-container {
+  background: var(--surface-inset);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.chart-bars-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 130px;
+  margin-top: 14px;
+}
+
+.bar-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.bar-val {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.bar-fill {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--accent), var(--accent-light));
+  transition: height 0.4s ease;
+}
+
+.bar-fill.zero {
+  background: var(--surface-active);
+  min-height: 4px;
+}
+
+.bar-date {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+/* Key-Value Details */
+.kv-grid {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 12.5px;
+}
+
+.kv-row:last-child {
+  border-bottom: none;
+}
+
+.kv-label {
+  color: var(--text-muted);
+}
+
+.kv-val {
+  font-family: var(--font-mono);
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+/* Timeline of Events */
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.timeline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.timeline-text {
+  color: var(--text-main);
+}
+
+.timeline-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* AI Copilot Box */
+.ai-copilot-card {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), transparent 70%), var(--surface-inset);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-copilot-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-copilot-body {
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+/* Toast Notification */
+.toast-notice {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--toast-bg);
+  border: 1px solid var(--accent);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #fff;
+  z-index: 2000;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.toast-notice.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .content-split { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main-content { padding: 18px; }
+  .design-lab-bar { flex-direction: column; align-items: stretch; }
+  .kpi-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body data-theme="obsidian">
+
+<!-- ==========================================================================
+     STICKY TOP DESIGN LAB CONTROLLER
+     ========================================================================== -->
+<div class="design-lab-bar">
+  <div class="lab-title">
+    <span class="lab-badge">Design Lab</span>
+    <span>FB Rent — Порівняння 3 Концепцій Оформлення</span>
+  </div>
+
+  <div class="theme-switcher-group" role="tablist" aria-label="Вибір візуального стилю">
+    <button class="theme-tab-btn active" data-set-theme="obsidian" type="button" role="tab" aria-selected="true">
+      <span class="dot-preview"></span>
+      1. Obsidian Pro (Linear)
+    </button>
+    <button class="theme-tab-btn" data-set-theme="mercury" type="button" role="tab" aria-selected="false">
+      <span class="dot-preview"></span>
+      2. Mercury FinTech (SaaS)
+    </button>
+    <button class="theme-tab-btn" data-set-theme="tactical" type="button" role="tab" aria-selected="false">
+      <span class="dot-preview"></span>
+      3. Tactical Cyber Deck (Ops)
+    </button>
+  </div>
+
+  <div class="lab-controls">
+    <button class="view-toggle-btn" id="open-account-drawer-btn" type="button">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+      Картка акаунта (Drawer)
+    </button>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     ACTIVE CONCEPT DESCRIPTION BANNER
+     ========================================================================== -->
+<div class="concept-description-banner" id="concept-banner">
+  <div id="concept-text">
+    <strong>Концепція 1: Obsidian Pro</strong> — Естетика Linear, Vercel та Raycast. Глибокий онікс, витончені волосяні межі 1px, неоновий янтарний акцент, висока щільність даних для профі.
+  </div>
+  <div class="concept-tags" id="concept-tags">
+    <span class="concept-tag">Inter + JetBrains Mono</span>
+    <span class="concept-tag">Minimalist Glow</span>
+    <span class="concept-tag">High Density</span>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     APP SHELL
+     ========================================================================== -->
+<div class="app-container">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand-section">
+      <div class="brand-logo-box">FR</div>
+      <div class="brand-info">
+        <div class="brand-name">FB Rent</div>
+        <div class="brand-sub">Ops Control Panel</div>
+      </div>
+    </div>
+
+    <nav class="nav-menu" aria-label="Головна навігація">
+      <a href="#dashboard" class="nav-link active">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          <span>Дашборд</span>
+        </div>
+      </a>
+      <a href="#accounts" class="nav-link">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+          <span>Акаунти</span>
+        </div>
+        <span class="nav-count">113</span>
+      </a>
+      <a href="#kanban" class="nav-link">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 3h4v18H4zM10 3h4v12h-4zM16 3h4v8h-4z"/></svg>
+          <span>Етапи (Канбан)</span>
+        </div>
+      </a>
+      <a href="#requests" class="nav-link">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Заявки Telegram</span>
+        </div>
+        <span class="nav-badge-pill">3</span>
+      </a>
+      <a href="#clients" class="nav-link">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Клієнти</span>
+        </div>
+        <span class="nav-count">8</span>
+      </a>
+      <a href="#suppliers" class="nav-link">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          <span>Постачальники</span>
+        </div>
+      </a>
+      <a href="#finances" class="nav-link">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span>Фінанси</span>
+        </div>
+      </a>
+      <a href="#audit" class="nav-link">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          <span>Журнал подій</span>
+        </div>
+      </a>
+      <a href="#agent" class="nav-link">
+        <div class="nav-link-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+          <span>ШІ-Агент</span>
+        </div>
+      </a>
+    </nav>
+
+    <!-- Sidebar Telemetry -->
+    <div class="sidebar-telemetry">
+      <div class="telemetry-header">
+        <span>Статус шлюзів</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div class="telemetry-row">
+        <span class="telemetry-item-name">AdsPower Bridge</span>
+        <span class="telemetry-status"><span class="pulse-dot online"></span> 24ms</span>
+      </div>
+      <div class="telemetry-row">
+        <span class="telemetry-item-name">Clover Spend</span>
+        <span class="telemetry-status" style="color:var(--text-muted)">14:57 (OK)</span>
+      </div>
+      <div class="telemetry-row">
+        <span class="telemetry-item-name">Telegram Bot</span>
+        <span class="telemetry-status" style="color:var(--success)">listening</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Workspace -->
+  <main class="main-content">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-title-group">
+        <h1 class="display-font">Панель керування</h1>
+        <div class="page-subtitle">
+          <span>Понеділок, 28 вересня</span>
+          <span>•</span>
+          <span class="sync-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            Clover синхронізовано о 14:57
+          </span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="search-wrapper">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input class="search-input" type="search" placeholder="Пошук кабінету, клієнта, ID...">
+          <span class="search-shortcut">⌘K</span>
+        </div>
+        <button class="btn btn-primary" type="button" onclick="showToast('Відкрито модалку: Закупівля нової партії акаунтів')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+          Додати партію
+        </button>
+      </div>
+    </div>
+
+    <!-- KPIs Row -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Спенд сьогодні</span>
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">$21.81</span>
+          <span class="kpi-trend positive">+14.2%</span>
+        </div>
+        <div class="kpi-footer">по 35 активних кабінетах</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Активні / Всього в Clover</span>
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">35 <span style="font-size:16px;color:var(--text-faint);font-weight:400">/ 90</span></span>
+        </div>
+        <div class="kpi-footer">38.8% утилізація пулу</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Готові до видачі</span>
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">6 <span style="font-size:16px;color:var(--stage-ready-fg)">кабінетів</span></span>
+        </div>
+        <div class="kpi-footer">пройшли перевірку 24h</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-label">Заявки в черзі</span>
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">3</span>
+          <span class="kpi-trend warning">2 чекають апруву</span>
+        </div>
+        <div class="kpi-footer">середній час реакції 4 хв</div>
+      </div>
+    </div>
+
+    <!-- Funnel Pipeline Stepper -->
+    <section class="panel-container">
+      <div class="panel-header">
+        <div class="panel-header-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          <h2>Операційний ланцюг акаунтів</h2>
+        </div>
+        <span class="panel-header-sub">Клік по етапу активує фільтр списку</span>
+      </div>
+
+      <div class="funnel-wrapper">
+        <button class="funnel-step" type="button" onclick="showToast('Фільтр: Куплено (3)')">
+          <span class="step-label">1. Куплено</span>
+          <span class="step-counter">3</span>
+        </button>
+        <button class="funnel-step" type="button" onclick="showToast('Фільтр: AdsPower (2)')">
+          <span class="step-label">2. AdsPower</span>
+          <span class="step-counter">2</span>
+        </button>
+        <button class="funnel-step" type="button" onclick="showToast('Фільтр: БМ (2)')">
+          <span class="step-label">3. БМ</span>
+          <span class="step-counter">2</span>
+        </button>
+        <button class="funnel-step" type="button" onclick="showToast('Фільтр: Номер (1)')">
+          <span class="step-label">4. Номер</span>
+          <span class="step-counter">1</span>
+        </button>
+        <button class="funnel-step" type="button" onclick="showToast('Фільтр: Прогрів (4)')">
+          <span class="step-label">5. Прогрів</span>
+          <span class="step-counter">4</span>
+        </button>
+        <button class="funnel-step" type="button" onclick="showToast('Фільтр: Карта (2)')">
+          <span class="step-label">6. Карта</span>
+          <span class="step-counter">2</span>
+        </button>
+        <button class="funnel-step" type="button" onclick="showToast('Фільтр: Перевірка 24г (3)')">
+          <span class="step-label">7. Перевірка 24г</span>
+          <span class="step-counter">3</span>
+        </button>
+        <button class="funnel-step ready" type="button" onclick="showToast('Фільтр: Готові (6)')">
+          <span class="step-label">8. Готові</span>
+          <span class="step-counter">6</span>
+        </button>
+        <button class="funnel-step issued" type="button" onclick="showToast('Фільтр: Видані (35)')">
+          <span class="step-label">9. Видано</span>
+          <span class="step-counter">35</span>
+        </button>
+
+        <div class="funnel-divider"></div>
+
+        <div class="off-stats-box">
+          <div class="off-header">
+            <span>OFF-ПУЛ</span>
+            <span style="font-family:var(--font-mono);font-size:14px">55</span>
+          </div>
+          <div class="off-breakdown">
+            <span>Бан: <b>30</b></span>
+            <span>Резерв: <b>12</b></span>
+            <span>Пауза: <b>13</b></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2-Column Split: Accounts Table + Telegram/Signals Side -->
+    <div class="content-split">
+
+      <!-- Left Column: Accounts Table -->
+      <section class="panel-container">
+        <div class="panel-header">
+          <div class="panel-header-title">
+            <h2>Реєстр акаунтів</h2>
+          </div>
+          <div class="table-filter-chips">
+            <button class="chip-btn active" type="button">Усі</button>
+            <button class="chip-btn" type="button">Видані (35)</button>
+            <button class="chip-btn" type="button">Готові (6)</button>
+            <button class="chip-btn" type="button" style="color:var(--danger)">Сигнали (3)</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Код</th>
+                <th>Клієнт</th>
+                <th>Етап</th>
+                <th>Сьогодні</th>
+                <th>Ліміт</th>
+                <th>Оголошення</th>
+                <th>Загалом</th>
+              </tr>
+            </thead>
+            <tbody id="accounts-table-body">
+              <!-- Row 1 -->
+              <tr class="clickable-row" onclick="openDrawer('FB-0147', 'Nord', 'Видано', '$2.74', '$136', '$1 284')">
+                <td>
+                  <div class="account-code-cell">
+                    <span>FB-0147</span>
+                    <button class="copy-mini-btn" title="Скопіювати код" onclick="event.stopPropagation(); copyText('FB-0147')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    </button>
+                  </div>
+                </td>
+                <td>
+                  <div class="client-badge-pill">
+                    <div class="client-avatar">N</div>
+                    <span>Nord</span>
+                  </div>
+                </td>
+                <td><span class="status-pill issued">Видано</span></td>
+                <td class="mono" style="font-weight:600">$2.74</td>
+                <td class="mono" style="color:var(--text-muted)">$136</td>
+                <td class="mono">17 <span class="issues-tag">+4 err</span></td>
+                <td class="mono" style="color:var(--text-muted)">$1,284</td>
+              </tr>
+
+              <!-- Row 2 -->
+              <tr class="clickable-row" onclick="openDrawer('FB-0112', 'Vega', 'Видано', '$9.90', '$220', '$3 910')">
+                <td>
+                  <div class="account-code-cell">
+                    <span>FB-0112</span>
+                    <button class="copy-mini-btn" title="Скопіювати код" onclick="event.stopPropagation(); copyText('FB-0112')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    </button>
+                  </div>
+                </td>
+                <td>
+                  <div class="client-badge-pill">
+                    <div class="client-avatar" style="color:var(--info)">V</div>
+                    <span>Vega</span>
+                  </div>
+                </td>
+                <td><span class="status-pill issued">Видано</span></td>
+                <td class="mono" style="font-weight:600">$9.90</td>
+                <td class="mono" style="color:var(--text-muted)">$220</td>
+                <td class="mono">12 <span class="issues-tag">+8 err</span></td>
+                <td class="mono" style="color:var(--text-muted)">$3,910</td>
+              </tr>
+
+              <!-- Row 3 -->
+              <tr class="clickable-row" onclick="openDrawer('FB-0098', 'Nord', 'Видано', '$0.00', '$50', '$640')">
+                <td>
+                  <div class="account-code-cell">
+                    <span>FB-0098</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="client-badge-pill">
+                    <div class="client-avatar">N</div>
+                    <span>Nord</span>
+                  </div>
+                </td>
+                <td><span class="status-pill issued">Видано</span></td>
+                <td class="mono" style="color:var(--warning)">$0.00</td>
+                <td class="mono" style="color:var(--text-muted)">$50</td>
+                <td class="mono">6</td>
+                <td class="mono" style="color:var(--text-muted)">$640</td>
+              </tr>
+
+              <!-- Row 4 -->
+              <tr class="clickable-row" onclick="openDrawer('FB-0155', '—', 'Готовий', '—', '$250', '—')">
+                <td>
+                  <div class="account-code-cell">
+                    <span>FB-0155</span>
+                  </div>
+                </td>
+                <td><span style="color:var(--text-faint)">—</span></td>
+                <td><span class="status-pill ready">Готовий</span></td>
+                <td class="mono" style="color:var(--text-faint)">—</td>
+                <td class="mono" style="color:var(--text-main);font-weight:600">$250</td>
+                <td class="mono" style="color:var(--text-faint)">0</td>
+                <td class="mono" style="color:var(--text-faint)">—</td>
+              </tr>
+
+              <!-- Row 5 -->
+              <tr class="clickable-row" onclick="openDrawer('FB-0158', '—', 'Готовий', '—', '$250', '—')">
+                <td>
+                  <div class="account-code-cell">
+                    <span>FB-0158</span>
+                  </div>
+                </td>
+                <td><span style="color:var(--text-faint)">—</span></td>
+                <td><span class="status-pill ready">Готовий</span></td>
+                <td class="mono" style="color:var(--text-faint)">—</td>
+                <td class="mono" style="color:var(--text-main);font-weight:600">$250</td>
+                <td class="mono" style="color:var(--text-faint)">0</td>
+                <td class="mono" style="color:var(--text-faint)">—</td>
+              </tr>
+
+              <!-- Row 6 -->
+              <tr class="clickable-row" onclick="openDrawer('FB-0153', '—', 'Перевірка 24г', '—', '$50', '—')">
+                <td>
+                  <div class="account-code-cell">
+                    <span>FB-0153</span>
+                  </div>
+                </td>
+                <td><span style="color:var(--text-faint)">—</span></td>
+                <td><span class="status-pill check">Перевірка 24г</span></td>
+                <td class="mono" style="color:var(--text-faint)">—</td>
+                <td class="mono" style="color:var(--text-muted)">$50</td>
+                <td class="mono" style="color:var(--text-faint)">0</td>
+                <td class="mono" style="color:var(--text-faint)">—</td>
+              </tr>
+
+              <!-- Row 7 -->
+              <tr class="clickable-row" onclick="openDrawer('FB-0121', 'Atlas', 'Бан', '—', '$739', '$12 603')">
+                <td>
+                  <div class="account-code-cell" style="color:var(--text-faint)">
+                    <span>FB-0121</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="client-badge-pill" style="opacity:0.7">
+                    <div class="client-avatar" style="color:var(--danger)">A</div>
+                    <span>Atlas</span>
+                  </div>
+                </td>
+                <td><span class="status-pill off">Бан (Off)</span></td>
+                <td class="mono" style="color:var(--text-faint)">—</td>
+                <td class="mono" style="color:var(--text-faint)">$739</td>
+                <td class="mono" style="color:var(--text-faint)">—</td>
+                <td class="mono" style="color:var(--text-faint)">$12,603</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Right Column: Live Requests & Alerts -->
+      <div class="side-widgets-column">
+
+        <!-- Telegram Inbound Requests -->
+        <section class="panel-container">
+          <div class="panel-header">
+            <div class="panel-header-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <h2>Заявки з Telegram</h2>
+            </div>
+            <span class="nav-badge-pill">2 нові</span>
+          </div>
+
+          <div class="requests-list">
+            <!-- Request 1 -->
+            <div class="request-card">
+              <div class="req-top">
+                <span class="req-sender">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                  @nord_media
+                </span>
+                <span class="req-time">10:42</span>
+              </div>
+              <div class="req-quote">«треба ще 2 кабінети під PL, ліміт 250»</div>
+              <div class="req-ai-parsed">
+                <span class="req-ai-label">ШІ-розбір: Видача 2 шт • GEO PL • Limit $250</span>
+                <span class="req-ai-proposal">Підібрано: FB-0155, FB-0158</span>
+              </div>
+              <div class="req-buttons-row">
+                <button class="btn btn-primary btn-sm" type="button" onclick="showToast('Апрувлено! Видано FB-0155, FB-0158 клієнту @nord_media')">
+                  Апрув і видати
+                </button>
+                <button class="btn btn-sm" type="button" onclick="showToast('Відкрито діалог зміни кабінетів')">Змінити</button>
+                <button class="btn btn-sm" type="button" style="color:var(--danger)" onclick="showToast('Заявку відхилено')">Відхилити</button>
+              </div>
+            </div>
+
+            <!-- Request 2 -->
+            <div class="request-card">
+              <div class="req-top">
+                <span class="req-sender" style="color:var(--accent)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                  @vega_team
+                </span>
+                <span class="req-time">09:15</span>
+              </div>
+              <div class="req-quote">«на FB-0112 купа відхилених, дайте заміну»</div>
+              <div class="req-ai-parsed">
+                <span class="req-ai-label">ШІ-розбір: Заміна кабінету FB-0112 (повернення)</span>
+                <span class="req-ai-proposal">Пропозиція: FB-0161 (check до 18:00)</span>
+              </div>
+              <div class="req-buttons-row">
+                <button class="btn btn-primary btn-sm" type="button" onclick="showToast('Апрувлено заміну! FB-0112 → Returned, FB-0161 заброньовано')">
+                  Видати заміну
+                </button>
+                <button class="btn btn-sm" type="button" onclick="showToast('Відхилено')">Відхилити</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- System Telemetry & Operational Signals -->
+        <section class="panel-container">
+          <div class="panel-header">
+            <div class="panel-header-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+              <h2>Операційні сигнали</h2>
+            </div>
+          </div>
+
+          <div class="signals-list">
+            <div class="signal-row">
+              <span class="signal-dot-indicator" style="background:var(--danger);box-shadow:0 0 8px var(--danger)"></span>
+              <div class="signal-body">
+                <span class="signal-title"><strong>FB-0112</strong>: 8 проблемних оголошень</span>
+                <span class="signal-meta">Clover • 14:57 • Клієнт «Vega»</span>
+              </div>
+            </div>
+
+            <div class="signal-row">
+              <span class="signal-dot-indicator" style="background:var(--warning);box-shadow:0 0 8px var(--warning)"></span>
+              <div class="signal-body">
+                <span class="signal-title"><strong>FB-0098</strong>: нуль спенду сьогодні (вчора $41)</span>
+                <span class="signal-meta">Clover • 14:57 • Клієнт «Nord»</span>
+              </div>
+            </div>
+
+            <div class="signal-row">
+              <span class="signal-dot-indicator" style="background:var(--stage-ready-fg);box-shadow:0 0 8px var(--stage-ready-fg)"></span>
+              <div class="signal-body">
+                <span class="signal-title"><strong>FB-0153</strong>: перевірка 24h завершується</span>
+                <span class="signal-meta">Сьогодні о 17:30 → перейде в Ready</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ==========================================================================
+     DRAWER: ACCOUNT CARD INSPECTOR
+     ========================================================================== -->
+<div class="drawer-backdrop" id="account-drawer" onclick="closeDrawer(event)">
+  <div class="drawer-panel" onclick="event.stopPropagation()">
+    <div class="drawer-header">
+      <div class="drawer-acc-title">
+        <div class="drawer-acc-code-row">
+          <span class="drawer-acc-code" id="drawer-code">FB-0147</span>
+          <span class="status-pill issued" id="drawer-stage">Видано</span>
+        </div>
+        <div style="font-size:13px;color:var(--text-muted)">
+          Клієнт <b style="color:var(--text-main)" id="drawer-client">Nord</b> • Видано 27 вересня
+        </div>
+      </div>
+      <button class="drawer-close-btn" type="button" onclick="closeDrawerDirect()" title="Закрити">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Quick action buttons -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-primary" type="button" onclick="showToast('Bridge: надсилаємо команду open_profile...')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
+        Відкрити профіль AdsPower
+      </button>
+      <button class="btn btn-sm" type="button" onclick="showToast('Повернення в пул: потрібна off_reason')">
+        Повернути в пул
+      </button>
+      <button class="btn btn-sm" type="button" onclick="showToast('Зміна етапу: відкриття діалогу валідації статус-машини')">
+        Змінити етап
+      </button>
+    </div>
+
+    <!-- 7-Day Spend Chart -->
+    <div class="spend-chart-container">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700;font-size:13px">Динаміка спенду за 7 днів</span>
+        <span class="mono" style="font-size:11px;color:var(--text-faint)">Europe/Kyiv</span>
+      </div>
+      <div class="chart-bars-wrap">
+        <div class="bar-column">
+          <span class="bar-val">—</span>
+          <div class="bar-fill zero"></div>
+          <span class="bar-date">22.09</span>
+        </div>
+        <div class="bar-column">
+          <span class="bar-val">—</span>
+          <div class="bar-fill zero"></div>
+          <span class="bar-date">23.09</span>
+        </div>
+        <div class="bar-column">
+          <span class="bar-val">—</span>
+          <div class="bar-fill zero"></div>
+          <span class="bar-date">24.09</span>
+        </div>
+        <div class="bar-column">
+          <span class="bar-val">—</span>
+          <div class="bar-fill zero"></div>
+          <span class="bar-date">25.09</span>
+        </div>
+        <div class="bar-column">
+          <span class="bar-val">—</span>
+          <div class="bar-fill zero"></div>
+          <span class="bar-date">26.09</span>
+        </div>
+        <div class="bar-column">
+          <span class="bar-val">$38.2</span>
+          <div class="bar-fill" style="height:90%"></div>
+          <span class="bar-date">27.09</span>
+        </div>
+        <div class="bar-column">
+          <span class="bar-val">$2.74</span>
+          <div class="bar-fill" style="height:25%"></div>
+          <span class="bar-date">28.09</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Copilot Suggestion Box -->
+    <div class="ai-copilot-card">
+      <div class="ai-copilot-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+        ШІ-Асистент пропонує
+      </div>
+      <div class="ai-copilot-body">
+        Виявлено <b>4 проблемні оголошення</b> за останні 2 години. Підготувати чернетку сповіщення для клієнта «Nord» у Telegram?
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-primary" type="button" onclick="showToast('Чернетка згенерована та відправлена на погодження адміну')">Переглянути і надіслати</button>
+        <button class="btn btn-sm" type="button" onclick="showToast('Відкладено на 1 год')">Пізніше</button>
+      </div>
+    </div>
+
+    <!-- Attributes Key-Value Box -->
+    <div>
+      <h3 style="font-size:13px;font-weight:700;margin-bottom:8px">Прив'язки та атрибути</h3>
+      <div class="kv-grid">
+        <div class="kv-row">
+          <span class="kv-label">ID рекламного кабінету</span>
+          <span class="kv-val">act_6543571102894</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-label">Бізнес-менеджер (BM)</span>
+          <span class="kv-val">BM-NORD-ALPHA-01</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-label">AdsPower Профіль</span>
+          <span class="kv-val">#j63k99 (Group: Nord)</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-label">Часовий пояс</span>
+          <span class="kv-val">GMT+3 (Europe/Kyiv)</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-label">Прив'язана карта</span>
+          <span class="kv-val">•••• 4417</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-label">Партія / Постачальник</span>
+          <span class="kv-val">Партія #14 (TraffSupply)</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-label">Собівартість закупівлі</span>
+          <span class="kv-val">$14.50</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-label">Умови клієнта</span>
+          <span class="kv-val">10% від спенду</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline of Account Events -->
+    <div>
+      <h3 style="font-size:13px;font-weight:700;margin-bottom:10px">Журнал переходів (Append-Only)</h3>
+      <div class="timeline-list">
+        <div class="timeline-item">
+          <span class="timeline-dot" style="background:var(--danger)"></span>
+          <div class="timeline-content">
+            <div class="timeline-text">Clover: спенд $2.74, +4 проблемні оголошення</div>
+            <div class="timeline-meta"><span>28.09 14:57</span><span>авто, Clover</span></div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <span class="timeline-dot" style="background:var(--stage-issued-fg)"></span>
+          <div class="timeline-content">
+            <div class="timeline-text">Видано клієнту «Nord» за заявкою з Telegram</div>
+            <div class="timeline-meta"><span>27.09 11:20</span><span>апрув, адмін</span></div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <span class="timeline-dot" style="background:var(--stage-ready-fg)"></span>
+          <div class="timeline-content">
+            <div class="timeline-text">Перевірку 24 год успішно пройдено</div>
+            <div class="timeline-meta"><span>27.09 10:05</span><span>автомат системи</span></div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <span class="timeline-dot" style="background:var(--text-muted)"></span>
+          <div class="timeline-content">
+            <div class="timeline-text">Карту прив'язано (•• 4417)</div>
+            <div class="timeline-meta"><span>26.09 09:40</span><span>оператор Олена</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     TOAST NOTIFICATION
+     ========================================================================== -->
+<div class="toast-notice" id="toast">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toast-msg">Дія виконана</span>
+</div>
+
+<!-- ==========================================================================
+     SCRIPTS: SWITCHER, DRAWER, INTERACTIVITY
+     ========================================================================== -->
+<script>
+// Concept Meta details
+const themesMeta = {
+  obsidian: {
+    name: "Концепція 1: Obsidian Pro (Linear / Raycast)",
+    desc: "Глибокий онікс (#090a0f), волосяні межі 1px, неоновий янтарний акцент (#f59e0b). Створено для професіоналів з максимальною щільністю корисної інформації.",
+    tags: ["Inter + JetBrains Mono", "Linear Style", "High-Density Data", "Glow Shadows"]
+  },
+  mercury: {
+    name: "Концепція 2: Mercury FinTech (SaaS Executive)",
+    desc: "Шляхетний темно-синій сланець (#0b0f19), шампанське золото (#e5b869), округлені картки 16px, м'які тіні. Виглядає як преміальний банкінг або Stripe.",
+    tags: ["Plus Jakarta Sans + Fira Code", "Executive SaaS", "Champagne Accent", "Elevated Cards"]
+  },
+  tactical: {
+    name: "Концепція 3: Tactical Cyber Deck (Arbitrage Ops)",
+    desc: "Вугільний бекграунд (#040508), кислотний кібер-янтар (#ffb800), неоновий циан та зелений пульс. Візуальний центр управління для щоденного швидкого арбітражу трафіку.",
+    tags: ["Outfit + JetBrains Mono", "Cyber Control Deck", "HUD Indicators", "Rapid Triage"]
+  }
+};
+
+// Theme Switcher Logic
+const switcherButtons = document.querySelectorAll('.theme-tab-btn');
+const conceptBanner = document.getElementById('concept-text');
+const conceptTags = document.getElementById('concept-tags');
+
+switcherButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const themeKey = btn.dataset.setTheme;
+
+    // Update body attribute
+    document.body.setAttribute('data-theme', themeKey);
+
+    // Update buttons active class
+    switcherButtons.forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', 'false');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+
+    // Update Banner description
+    const meta = themesMeta[themeKey];
+    conceptBanner.innerHTML = `<strong>${meta.name}</strong> — ${meta.desc}`;
+    conceptTags.innerHTML = meta.tags.map(t => `<span class="concept-tag">${t}</span>`).join('');
+
+    showToast(`Перемкнуто на: ${meta.name}`);
+  });
+});
+
+// Toast System
+let toastTimer = null;
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  const msgEl = document.getElementById('toast-msg');
+  msgEl.textContent = message;
+  toast.classList.add('show');
+
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3200);
+}
+
+// Drawer Controls
+const drawer = document.getElementById('account-drawer');
+const openDrawerBtn = document.getElementById('open-account-drawer-btn');
+
+function openDrawer(code, client, stage, today, limit, total) {
+  document.getElementById('drawer-code').textContent = code;
+  document.getElementById('drawer-client').textContent = client === '—' ? 'Не призначено' : client;
+  document.getElementById('drawer-stage').textContent = stage;
+  drawer.classList.add('active');
+}
+
+function closeDrawer(event) {
+  if (event.target === drawer) {
+    drawer.classList.remove('active');
+  }
+}
+
+function closeDrawerDirect() {
+  drawer.classList.remove('active');
+}
+
+openDrawerBtn.addEventListener('click', () => {
+  openDrawer('FB-0147', 'Nord', 'Видано', '$2.74', '$136', '$1 284');
+});
+
+// Clipboard Helper
+function copyText(txt) {
+  navigator.clipboard.writeText(txt).then(() => {
+    showToast(`Скопійовано в буфер: ${txt}`);
+  }).catch(() => {
+    showToast(`Скопійовано: ${txt}`);
+  });
+}
+</script>
+</body>
+</html>

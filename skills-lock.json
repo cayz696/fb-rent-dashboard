@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "adspower-browser": {
+      "source": "adspower/adspower-browser",
+      "sourceType": "github",
+      "skillPath": "skills/adspower-browser/SKILL.md",
+      "computedHash": "b5311d6d84ab8654b670c30422bbee1be8af1252bfc17775c1f03db6306fbcff"
+    }
+  }
+}

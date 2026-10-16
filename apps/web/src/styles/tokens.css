@@ -1,0 +1,31 @@
+/* Тема Obsidian Pro (Linear/Vercel dark). Джерело: docs/design/visual-concepts.html [data-theme="obsidian"].
+   Мапляться в tailwind.config → theme.extend.colors/borderRadius/fontFamily. */
+:root {
+  /* Шрифти: Inter + JetBrains Mono підключаються через next/font (layout.tsx) → --font-inter / --font-jetbrains.
+     Радіуси (6/10/14/18px) задані в @theme у globals.css. */
+
+  --bg: #090a0f;
+  --surface: #101218; --surface-hover: #151821; --surface-active: #1b1f2b; --surface-inset: #0b0d13;
+  --panel-border: rgba(255,255,255,.07); --panel-border-hover: rgba(255,255,255,.14);
+  --border-strong: rgba(255,255,255,.12); --divider: rgba(255,255,255,.05);
+
+  --text-main: #f3f4f6; --text-muted: #9ca3af; --text-faint: #6b7280;
+
+  --accent: #f59e0b; --accent-light: #fbbf24; --accent-glow: rgba(245,158,11,.18); --on-accent: #090a0f;
+
+  --success: #10b981; --success-bg: rgba(16,185,129,.12); --success-border: rgba(16,185,129,.3);
+  --warning: #f59e0b; --warning-bg: rgba(245,158,11,.12); --warning-border: rgba(245,158,11,.3);
+  --danger:  #ef4444; --danger-bg:  rgba(239,68,68,.12);  --danger-border:  rgba(239,68,68,.3);
+  --info:    #38bdf8; --info-bg:    rgba(56,189,248,.12);  --info-border:    rgba(56,189,248,.3);
+
+  /* кольори етапів (розділ 5 ТЗ) */
+  --stage-ready-bg: rgba(56,189,248,.12);  --stage-ready-fg: #7dd3fc;
+  --stage-issued-bg: rgba(16,185,129,.12); --stage-issued-fg: #6ee7b7;
+  --stage-check-bg: rgba(245,158,11,.12);  --stage-check-fg: #fde68a;
+  --stage-work-bg: rgba(255,255,255,.05);  --stage-work-fg: #d1d5db;
+  --stage-off-bg: rgba(239,68,68,.12);     --stage-off-fg: #fca5a5;
+
+  --shadow-panel: 0 4px 24px -2px rgba(0,0,0,.5), 0 0 0 1px var(--panel-border);
+  --glow-kpi: radial-gradient(circle at 50% 0%, rgba(245,158,11,.06), transparent 70%);
+  --transition: all .2s cubic-bezier(.16,1,.3,1);
+}
