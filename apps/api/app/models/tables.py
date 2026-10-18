@@ -189,6 +189,7 @@ class Team(Base):
     name: Mapped[str] = mapped_column(String(128), unique=True)
     sheet_url: Mapped[str | None] = mapped_column(Text)
     sheet_gid: Mapped[str | None] = mapped_column(String(32))
+    sheet_webhook_url: Mapped[str | None] = mapped_column(Text)
     sheet_balance: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     topup_total: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     spend_total_sheet: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))

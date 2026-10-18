@@ -88,6 +88,7 @@ export interface FbmAccountBalance {
 }
 export interface TeamItem {
   id: string; name: string; sheet_url: string | null; sheet_gid: string | null;
+  sheet_webhook_url: string | null;
   sheet_balance: string | null; topup_total: string | null; spend_total_sheet: string | null;
   spend_total_fbm: string; fee_percent: string; buyers_count: number;
   last_sheet_sync: string | null; low_balance: boolean; negative_balance: boolean; notes: string | null;

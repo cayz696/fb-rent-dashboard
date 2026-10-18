@@ -32,6 +32,7 @@ class TeamIn(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     sheet_url: str | None = None
     sheet_gid: str | None = None
+    sheet_webhook_url: str | None = None
     sheet_balance: Decimal | None = None
     fee_percent: Decimal = Decimal("7.00")
     notes: str | None = None
@@ -41,6 +42,7 @@ class TeamPatch(BaseModel):
     name: str | None = None
     sheet_url: str | None = None
     sheet_gid: str | None = None
+    sheet_webhook_url: str | None = None
     sheet_balance: Decimal | None = None
     topup_total: Decimal | None = None
     spend_total_sheet: Decimal | None = None
@@ -215,6 +217,7 @@ def overview(
             "name": t.name,
             "sheet_url": t.sheet_url,
             "sheet_gid": t.sheet_gid,
+            "sheet_webhook_url": t.sheet_webhook_url,
             "sheet_balance": bal,
             "topup_total": t.topup_total,
             "spend_total_sheet": t.spend_total_sheet,
@@ -440,6 +443,7 @@ def create_team(body: TeamIn, db: Session = Depends(get_db), _: User = Depends(c
         name=clean,
         sheet_url=body.sheet_url,
         sheet_gid=body.sheet_gid,
+        sheet_webhook_url=body.sheet_webhook_url,
         sheet_balance=body.sheet_balance,
         fee_percent=body.fee_percent,
         notes=body.notes,
@@ -461,6 +465,8 @@ def patch_team(team_id: uuid.UUID, body: TeamPatch, db: Session = Depends(get_db
         t.sheet_url = body.sheet_url
     if "sheet_gid" in body.model_fields_set:
         t.sheet_gid = body.sheet_gid
+    if "sheet_webhook_url" in body.model_fields_set:
+        t.sheet_webhook_url = body.sheet_webhook_url
     if "sheet_balance" in body.model_fields_set:
         t.sheet_balance = body.sheet_balance
     if "topup_total" in body.model_fields_set:
@@ -472,7 +478,7 @@ def patch_team(team_id: uuid.UUID, body: TeamPatch, db: Session = Depends(get_db
     if "notes" in body.model_fields_set:
         t.notes = body.notes
     db.commit()
-    return {"id": str(t.id), "name": t.name, "sheet_balance": t.sheet_balance}
+    return {"id": str(t.id), "name": t.name, "sheet_balance": t.sheet_balance, "sheet_webhook_url": t.sheet_webhook_url}
 
 
 @router.post("/teams/{team_id}/sync-sheet")
@@ -489,6 +495,23 @@ def sync_team_sheet(
         if body and body.csv_content:
             return buyers_sync.sync_team_sheet_csv(db, t, body.csv_content)
         return buyers_sync.fetch_and_sync_team_sheet(db, t)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/teams/{team_id}/push-sheet")
+def push_team_sheet(
+    team_id: uuid.UUID,
+    days: int = Query(14, ge=1, le=60),
+    db: Session = Depends(get_db),
+    _: User = Depends(can_write),
+):
+    """Автоматично записує актуальні дані спенду в Google-таблицю команди."""
+    t = db.get(Team, team_id)
+    if not t:
+        raise HTTPException(404, "Команду не знайдено")
+    try:
+        return buyers_sync.push_team_spends_to_sheet(db, t, days=days)
     except ValueError as e:
         raise HTTPException(400, str(e))
 

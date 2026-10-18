@@ -15,7 +15,8 @@ from sqlalchemy import select
 
 
 async def _periodic_fbm_and_sheets_loop():
-    """Фоновий цикл: кожні 3.5 години фіксує спенд по картках FBM, синхронізує таблиці команд,
+    """Фоновий цикл: кожні 3.5 години фіксує спенд по картках FBM,
+    автоматично вносить актуальні дані в Google-таблиці команд,
     і раз на добу звіряє суми з кабінетом FBM Cards."""
     ticks = 0
     while True:
@@ -23,13 +24,21 @@ async def _periodic_fbm_and_sheets_loop():
         ticks += 1
         try:
             with SessionLocal() as db:
+                # 1. Зафіксувати свіжий спенд з FBM у БД
                 buyers_sync.record_card_spends(db, refresh_fbm=True)
-                for t in db.scalars(select(Team).where(Team.sheet_url.is_not(None))).all():
+
+                # 2. Автоматично оновити дані в Google-таблицях команд
+                for t in db.scalars(select(Team)).all():
                     try:
-                        buyers_sync.fetch_and_sync_team_sheet(db, t)
+                        if t.sheet_webhook_url:
+                            buyers_sync.push_team_spends_to_sheet(db, t)
+                        elif t.sheet_url:
+                            buyers_sync.fetch_and_sync_team_sheet(db, t)
                     except Exception:
                         pass
-                if ticks % 7 == 0:  # ~24 години
+
+                # 3. Добова звірка раз на 24 години
+                if ticks % 7 == 0:
                     buyers_sync.reconcile_fbm_spend(db, fetch_live=True)
         except Exception:
             pass

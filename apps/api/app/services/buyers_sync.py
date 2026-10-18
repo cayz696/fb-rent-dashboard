@@ -3,7 +3,8 @@
 import csv
 import io
 import re
-from datetime import date, datetime, timezone
+import uuid
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 import httpx
@@ -632,3 +633,63 @@ def fetch_and_sync_team_sheet(db: Session, team: Team) -> dict:
     except httpx.HTTPError as e:
         raise ValueError(f"Не вдалося прочитати таблицю: {e}") from e
     return sync_team_sheet_csv(db, team, r.text)
+
+
+def push_team_spends_to_sheet(db: Session, team: Team, days: int = 14) -> dict:
+    """Автоматично записує актуальні дані спенду юзерів команди в Google-таблицю
+    через Google Apps Script Webhook або сервісний акаунт Google."""
+    buyers = db.scalars(
+        select(Buyer).where(Buyer.team_id == team.id).order_by(Buyer.is_priority.desc(), Buyer.name.asc())
+    ).all()
+    today = today_kyiv()
+    dates = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
+
+    rows_db = db.scalars(
+        select(BuyerDailySpend).where(
+            BuyerDailySpend.buyer_id.in_([b.id for b in buyers] or [uuid.uuid4()]),
+            BuyerDailySpend.date >= dates[0],
+        )
+    ).all()
+    by_b_dt: dict[tuple[uuid.UUID, date], Decimal] = {}
+    for r in rows_db:
+        val = r.spend_fbm if (r.spend_fbm and r.spend_fbm > Decimal("0")) else (r.spend_sheet or Decimal("0"))
+        by_b_dt[(r.buyer_id, r.date)] = val
+
+    date_labels = [f"{d.day}/{d.month}" for d in dates]
+    payload = {
+        "action": "update_spends",
+        "team_name": team.name,
+        "date_today": f"{today.day}/{today.month}",
+        "dates": date_labels,
+        "fee_percent": str(team.fee_percent),
+        "buyers": [
+            {
+                "name": b.name,
+                "accounts_count": b.accounts_count or 0,
+                "spend_today": str(by_b_dt.get((b.id, today), Decimal("0.00"))),
+                "spends": {
+                    f"{d.day}/{d.month}": str(by_b_dt.get((b.id, d), Decimal("0.00")))
+                    for d in dates
+                },
+            }
+            for b in buyers
+        ],
+    }
+
+    if team.sheet_webhook_url:
+        try:
+            with httpx.Client(timeout=30, follow_redirects=True) as client:
+                res = client.post(team.sheet_webhook_url, json=payload)
+                res.raise_for_status()
+                data = res.json() if "application/json" in res.headers.get("content-type", "") else {"raw": res.text}
+            team.last_sheet_sync = datetime.now(timezone.utc)
+            db.commit()
+            return {"ok": True, "method": "webhook", "buyers_count": len(buyers), "response": data}
+        except Exception as e:
+            raise ValueError(f"Помилка запису через Webhook: {e}") from e
+
+    raise ValueError(
+        "У команди не вказано Webhook URL для запису в Google-таблицю. "
+        "Вкажіть Google Apps Script Webhook URL у налаштуваннях команди."
+    )
+

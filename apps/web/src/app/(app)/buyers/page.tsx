@@ -5,6 +5,7 @@ import {
   Calendar,
   CheckCircle2,
   CheckSquare,
+  Code,
   CreditCard,
   Download,
   FileSpreadsheet,
@@ -14,6 +15,7 @@ import {
   ShieldCheck,
   Sparkles,
   Square,
+  UploadCloud,
   UserCheck,
   Wallet,
 } from "lucide-react";
@@ -105,6 +107,24 @@ export default function BuyersPage() {
       } else {
         setError(`Виявлено розбіжність із кабінетом FBM Cards на суму ${money(res.diff_amount)}! Створено сповіщення.`);
       }
+      mutate();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function pushTeamSheet(t: TeamItem) {
+    setBusy(`push-${t.id}`);
+    setError("");
+    setNotice("");
+    try {
+      const res = await api<{ ok: boolean; buyers_count?: number }>(`/buyers/teams/${t.id}/push-sheet`, {
+        method: "POST",
+        body: {},
+      });
+      setNotice(`Успішно записано спенд по ${res.buyers_count ?? "всіх"} юзерах у Google-таблицю команди «${t.name}»!`);
       mutate();
     } catch (e) {
       setError((e as Error).message);
@@ -281,9 +301,23 @@ export default function BuyersPage() {
                         </div>
                       </div>
                       {canWrite(user) && (
-                        <Button size="sm" onClick={() => setEditingTeam(t)}>
-                          Таблиця
-                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          {t.sheet_webhook_url && (
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              disabled={busy === `push-${t.id}`}
+                              onClick={() => pushTeamSheet(t)}
+                              title="Записати актуальні спенди з FBM у Google-таблицю"
+                            >
+                              <UploadCloud size={13} className={busy === `push-${t.id}` ? "animate-spin" : ""} />
+                              Записати
+                            </Button>
+                          )}
+                          <Button size="sm" onClick={() => setEditingTeam(t)}>
+                            Таблиця
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -830,11 +864,80 @@ function TeamSheetModal({
 }) {
   const [name, setName] = useState(team?.name ?? "");
   const [sheetUrl, setSheetUrl] = useState(team?.sheet_url ?? "");
+  const [sheetWebhookUrl, setSheetWebhookUrl] = useState(team?.sheet_webhook_url ?? "");
   const [sheetBalance, setSheetBalance] = useState(team?.sheet_balance ?? "");
   const [feePercent, setFeePercent] = useState(team?.fee_percent ?? "7.00");
   const [csvContent, setCsvContent] = useState("");
+  const [showScript, setShowScript] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const scriptCode = `function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var maxCols = Math.max(sheet.getLastColumn(), 25);
+    var maxRows = Math.max(sheet.getLastRow(), 30);
+    var headerRow = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
+    
+    // Карта дат (стовпці F+)
+    var dateMap = {};
+    for (var c = 0; c < headerRow.length; c++) {
+      var val = String(headerRow[c]).trim();
+      if (val) dateMap[val] = c + 1;
+    }
+    
+    // Карта юзерів (стовпець A, починаючи з рядка 4)
+    var buyerCol = sheet.getRange(1, 1, maxRows, 1).getValues();
+    var buyerRowMap = {};
+    for (var r = 3; r < buyerCol.length; r++) {
+      var bName = String(buyerCol[r][0]).trim().toLowerCase();
+      if (bName) buyerRowMap[bName] = r + 1;
+    }
+    
+    var nextRow = sheet.getLastRow() + 1;
+    var updated = 0;
+    
+    for (var i = 0; i < data.buyers.length; i++) {
+      var b = data.buyers[i];
+      var bLower = b.name.trim().toLowerCase();
+      var rIdx = buyerRowMap[bLower];
+      
+      if (!rIdx) {
+        sheet.getRange(nextRow, 1).setValue(b.name);
+        if (b.accounts_count) sheet.getRange(nextRow, 5).setValue(b.accounts_count);
+        rIdx = nextRow;
+        buyerRowMap[bLower] = rIdx;
+        nextRow++;
+      } else if (b.accounts_count) {
+        sheet.getRange(rIdx, 5).setValue(b.accounts_count);
+      }
+      
+      for (var dt in b.spends) {
+        var cIdx = dateMap[dt];
+        if (!cIdx) {
+          cIdx = sheet.getLastColumn() + 1;
+          sheet.getRange(1, cIdx).setValue(dt);
+          dateMap[dt] = cIdx;
+        }
+        sheet.getRange(rIdx, cIdx).setValue(parseFloat(b.spends[dt]) || 0);
+        updated++;
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: "ok", updated: updated }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+  function copyScript() {
+    navigator.clipboard.writeText(scriptCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   async function save() {
     setBusy(true);
@@ -846,6 +949,7 @@ function TeamSheetModal({
           body: {
             name,
             sheet_url: sheetUrl || null,
+            sheet_webhook_url: sheetWebhookUrl || null,
             sheet_balance: sheetBalance !== "" ? sheetBalance : null,
             fee_percent: feePercent || "7.00",
           },
@@ -857,6 +961,7 @@ function TeamSheetModal({
           body: {
             name,
             sheet_url: sheetUrl || null,
+            sheet_webhook_url: sheetWebhookUrl || null,
             sheet_balance: sheetBalance !== "" ? sheetBalance : null,
             fee_percent: feePercent || "7.00",
           },
@@ -883,8 +988,8 @@ function TeamSheetModal({
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Напр. CPA Samurai Team 298" />
       </Field>
       <Field
-        label="Посилання на Google-таблицю (публічне або CSV)"
-        hint="Дашборд кожні 3–4 год синхронізує баланс команди та поденні спенди юзерів без дублів."
+        label="Посилання на Google-таблицю (для читання)"
+        hint="Дашборд зчитує баланс команди та структуру юзерів."
       >
         <Input
           placeholder="https://docs.google.com/spreadsheets/d/..."
@@ -892,7 +997,58 @@ function TeamSheetModal({
           onChange={(e) => setSheetUrl(e.target.value)}
         />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      
+      <div className="rounded-lg border border-accent/30 bg-accent-soft/20 p-3 text-[12.5px]">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-accent">Автозапис спенду в Google-таблицю (без рук)</span>
+          <button
+            type="button"
+            onClick={() => setShowScript(!showScript)}
+            className="flex cursor-pointer items-center gap-1 font-mono text-[11.5px] text-accent underline"
+          >
+            <Code size={13} /> {showScript ? "Приховати інструкцію" : "Інструкція та код скрипта"}
+          </button>
+        </div>
+        <p className="mt-1 text-muted text-[11.5px]">
+          Вкажіть Webhook URL, і дашборд кожні 3–4 години сам вноситиме свіжий спенд з FBM у відповідні клітинки таблиці по юзерах і датах.
+        </p>
+        <div className="mt-2">
+          <Input
+            placeholder="https://script.google.com/macros/s/.../exec"
+            value={sheetWebhookUrl}
+            onChange={(e) => setSheetWebhookUrl(e.target.value)}
+          />
+        </div>
+
+        {showScript && (
+          <div className="mt-3 space-y-2 border-t border-divider pt-2.5">
+            <div className="text-[11.5px] text-muted">
+              <b>Як отримати цей Webhook за 1 хвилину:</b>
+              <ol className="mt-1 list-decimal space-y-1 pl-4 text-[11px]">
+                <li>У Google Таблиці натисніть <b>Розширення (Extensions) → Apps Script</b>.</li>
+                <li>Вставте готовий код нижче та натисніть <b>Зберегти (Save)</b>.</li>
+                <li>Натисніть <b>Розгорнути (Deploy) → Нове розгортання (New deployment)</b>.</li>
+                <li>Виберіть тип: <b>Веб-програма (Web app)</b>. Доступ: <b>Усі (Anyone)</b>.</li>
+                <li>Скопіюйте отриманий URL веб-програми та вставте його в поле вище!</li>
+              </ol>
+            </div>
+            <div className="relative">
+              <pre className="max-h-40 overflow-y-auto rounded bg-inset p-2 font-mono text-[10.5px] text-main">
+                {scriptCode}
+              </pre>
+              <button
+                type="button"
+                onClick={copyScript}
+                className="absolute right-2 top-2 rounded border border-line-strong bg-surface px-2 py-1 text-[11px] font-semibold text-accent shadow hover:bg-surface-hover cursor-pointer"
+              >
+                {copied ? "Скопійовано!" : "Скопіювати скрипт"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mt-2">
         <Field label="Поточний баланс команди ($)" hint="Якщо < $1000 або < $0 — прийде сповіщення">
           <Input
             type="number"
@@ -906,12 +1062,13 @@ function TeamSheetModal({
           <Input type="number" step="0.1" value={feePercent} onChange={(e) => setFeePercent(e.target.value)} />
         </Field>
       </div>
+
       <Field
         label="Або вставте скопійовані дані з таблиці (CSV)"
-        hint="Опціонально: якщо таблиця закрита для прямого читання, вставте вміст сюди."
+        hint="Опціонально для початкової синхронізації."
       >
         <textarea
-          rows={3}
+          rows={2}
           className="w-full rounded-md border border-line-strong bg-inset p-2 font-mono text-[12px]"
           placeholder="Юзер,ID аккаунта,Спенд потрачено..."
           value={csvContent}
@@ -922,7 +1079,7 @@ function TeamSheetModal({
       <div className="flex justify-end gap-2">
         <Button onClick={onClose}>Скасувати</Button>
         <Button variant="primary" onClick={save} disabled={!name.trim() || busy}>
-          {busy ? "Синхронізація…" : "Зберегти та синхронізувати"}
+          {busy ? "Збереження…" : "Зберегти"}
         </Button>
       </div>
     </Modal>
