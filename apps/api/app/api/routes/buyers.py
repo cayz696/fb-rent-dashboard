@@ -384,9 +384,7 @@ def get_buyer_detail(
         })
         cur += timedelta(days=1)
 
-    # Якщо поденних дельт ще не було, але на картках FBM є lifetime спенд і сьогодні входить у діапазон
-    if period_fbm == Decimal("0") and lifetime_fbm > Decimal("0") and d_from <= today <= d_to:
-        period_fbm = lifetime_fbm
+    # period_fbm є точною сумою спенду за обраний період із таблиці BuyerDailySpend (дельта FBM)
 
     recent_logs = db.scalars(
         select(CardSpendLog)

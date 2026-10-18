@@ -80,7 +80,7 @@ export function Chip({ active, onClick, children, tone }: { active?: boolean; on
   );
 }
 
-export function Modal({ title, onClose, children, width = "max-w-md" }: { title: string; onClose: () => void; children: ReactNode; width?: string }) {
+export function Modal({ title, onClose, children, width = "max-w-2xl" }: { title: string; onClose: () => void; children: ReactNode; width?: string }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", h);
@@ -88,8 +88,8 @@ export function Modal({ title, onClose, children, width = "max-w-md" }: { title:
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-label={title} className={cn("panel w-full space-y-4 p-6", width)}>
-        <div className="flex items-center justify-between">
+      <div role="dialog" aria-label={title} className={cn("panel w-full space-y-4 p-6 shadow-[0_20px_60px_rgba(0,0,0,.85)]", width)}>
+        <div className="flex items-center justify-between border-b border-divider pb-3">
           <h3 className="text-base font-semibold">{title}</h3>
           <button onClick={onClose} aria-label="Закрити" className="text-muted hover:text-main cursor-pointer"><X size={18} /></button>
         </div>

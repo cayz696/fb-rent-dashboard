@@ -1108,16 +1108,11 @@ function doPost(e) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mt-2 items-start">
-        <div className="space-y-1.5">
-          <div className="flex flex-col justify-between h-9">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
-              Поточний баланс команди ($)
-            </span>
-            <span className="block text-[10.5px] text-faint">
-              &lt; $1000 або &lt; $0 — сповіщення
-            </span>
-          </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-muted mb-1.5">
+            Поточний баланс команди ($)
+          </label>
           <Input
             type="number"
             step="0.01"
@@ -1125,22 +1120,23 @@ function doPost(e) {
             value={sheetBalance}
             onChange={(e) => setSheetBalance(e.target.value)}
           />
+          <span className="block mt-1 text-[11px] text-faint">
+            &lt; $1000 або &lt; $0 — прийде сповіщення
+          </span>
         </div>
-        <div className="space-y-1.5">
-          <div className="flex flex-col justify-between h-9">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
-              Комісія команди (%)
-            </span>
-            <span className="block text-[10.5px] text-faint">
-              Формула прибутку
-            </span>
-          </div>
+        <div>
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-muted mb-1.5">
+            Комісія команди (%)
+          </label>
           <Input
             type="number"
             step="0.1"
             value={feePercent}
             onChange={(e) => setFeePercent(e.target.value)}
           />
+          <span className="block mt-1 text-[11px] text-faint">
+            Формула розрахунку прибутку
+          </span>
         </div>
       </div>
 
