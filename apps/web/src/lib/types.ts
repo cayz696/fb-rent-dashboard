@@ -39,6 +39,7 @@ export interface Dashboard {
   spend_today: string | null; issued: number; pool_total: number; ready: number;
   requests_queue: number; requests_pending_approval: number;
   funnel: Record<Stage, number>; off_breakdown: Record<OffReason, number>; signals_count: number; clover_last_received: string | null;
+  fbm_spend_today?: string | null; fbm_spend_total?: string | null;
 }
 export interface Signal { type: string; severity: string; account_id: string | null; code: string | null; message: string }
 

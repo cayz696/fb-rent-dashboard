@@ -49,7 +49,7 @@ export function NotificationsBell() {
         )}
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 w-80 overflow-hidden rounded-lg border border-line-strong bg-surface shadow-[0_8px_32px_rgba(0,0,0,.6)]">
+        <div className="absolute bottom-0 left-full z-[100] ml-3 w-80 overflow-hidden rounded-lg border border-line-strong bg-surface shadow-[0_12px_40px_rgba(0,0,0,.85)]">
           <div className="flex items-center justify-between border-b border-divider px-4 py-2.5">
             <span className="text-[13px] font-semibold">Сповіщення {!!items.length && <span className="text-faint">({items.length})</span>}</span>
             <button onClick={() => setOpen(false)} className="text-muted hover:text-main cursor-pointer"><X size={15} /></button>

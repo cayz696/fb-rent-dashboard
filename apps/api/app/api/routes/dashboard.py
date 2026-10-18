@@ -27,6 +27,13 @@ def dashboard(db: Session = Depends(get_db), _: User = Depends(current_user)):
     off_breakdown = {r.value: off.get(r, 0) for r in OffReason}
     req_counts = dict(db.execute(select(Request.status, func.count()).group_by(Request.status)).all())
     pool = sum(v for k, v in by_stage.items() if k not in (Stage.off, Stage.sold))  # активний пул без off/продано
+
+    # Розрахунок спенду FBM Cards
+    today_dt = spend_svc.today_kyiv()
+    from app.models import BuyerDailySpend
+    fbm_today = db.scalar(select(func.sum(BuyerDailySpend.spend_fbm)).where(BuyerDailySpend.date == today_dt))
+    fbm_total = db.scalar(select(func.sum(BuyerDailySpend.spend_fbm)))
+
     return DashboardOut(
         spend_today=spend_svc.spend_today_total(db),
         issued=by_stage.get(Stage.issued, 0),
@@ -38,4 +45,6 @@ def dashboard(db: Session = Depends(get_db), _: User = Depends(current_user)):
         off_breakdown=off_breakdown,
         signals_count=len(signals_svc.compute(db)),
         clover_last_received=spend_svc.last_received(db),
+        fbm_spend_today=fbm_today,
+        fbm_spend_total=fbm_total,
     )

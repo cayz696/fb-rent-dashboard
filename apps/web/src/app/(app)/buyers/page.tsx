@@ -554,23 +554,31 @@ function BuyerCardModal({
   const monthStartStr = todayStr.slice(0, 8) + "01";
   const [dateFrom, setDateFrom] = useState(monthStartStr);
   const [dateTo, setDateTo] = useState(todayStr);
+  const [rangeMode, setRangeMode] = useState<"today" | "7" | "14" | "30" | "month" | "all" | "custom">("month");
 
   const { data, mutate } = useSWR<BuyerDetail>(
     `/api/buyers/${buyerId}?date_from=${dateFrom}&date_to=${dateTo}`,
     fetcher,
   );
 
-  function setQuickRange(days: number | "month" | "today") {
+  function setQuickRange(mode: "today" | 7 | 14 | 30 | "month" | "all") {
     const end = new Date();
     const toIso = end.toISOString().slice(0, 10);
-    if (days === "today") {
+    if (mode === "today") {
+      setRangeMode("today");
       setDateFrom(toIso);
       setDateTo(toIso);
-    } else if (days === "month") {
+    } else if (mode === "month") {
+      setRangeMode("month");
       setDateFrom(toIso.slice(0, 8) + "01");
       setDateTo(toIso);
+    } else if (mode === "all") {
+      setRangeMode("all");
+      setDateFrom("2025-01-01");
+      setDateTo(toIso);
     } else {
-      const start = new Date(end.getTime() - (days - 1) * 86400000);
+      setRangeMode(String(mode) as "7" | "14" | "30");
+      const start = new Date(end.getTime() - (mode - 1) * 86400000);
       setDateFrom(start.toISOString().slice(0, 10));
       setDateTo(toIso);
     }
@@ -670,44 +678,56 @@ function BuyerCardModal({
                 <Calendar size={14} className="text-accent" /> Період спенду:
               </span>
               <div className="flex flex-wrap gap-1">
-                <button
-                  type="button"
-                  onClick={() => setQuickRange("today")}
-                  className="cursor-pointer rounded border border-line-strong bg-surface-hover px-2 py-0.5 text-[11px] hover:border-accent"
-                >
-                  Сьогодні
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickRange(7)}
-                  className="cursor-pointer rounded border border-line-strong bg-surface-hover px-2 py-0.5 text-[11px] hover:border-accent"
-                >
-                  7 днів
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickRange(14)}
-                  className="cursor-pointer rounded border border-line-strong bg-surface-hover px-2 py-0.5 text-[11px] hover:border-accent"
-                >
-                  14 днів
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickRange("month")}
-                  className="cursor-pointer rounded border border-line-strong bg-surface-hover px-2 py-0.5 text-[11px] hover:border-accent"
-                >
-                  Цей місяць
-                </button>
+                {[
+                  { id: "today", label: "Сьогодні", action: () => setQuickRange("today") },
+                  { id: "7", label: "7 днів", action: () => setQuickRange(7) },
+                  { id: "14", label: "14 днів", action: () => setQuickRange(14) },
+                  { id: "30", label: "30 днів", action: () => setQuickRange(30) },
+                  { id: "month", label: "Цей місяць", action: () => setQuickRange("month") },
+                  { id: "all", label: "Увесь час", action: () => setQuickRange("all") },
+                ].map((btn) => {
+                  const active = rangeMode === btn.id;
+                  return (
+                    <button
+                      key={btn.id}
+                      type="button"
+                      onClick={btn.action}
+                      className={`cursor-pointer rounded px-2.5 py-1 text-[11px] font-medium transition ${
+                        active
+                          ? "border border-accent bg-accent text-on-accent shadow-[0_0_8px_var(--accent-glow)]"
+                          : "border border-line-strong bg-surface-hover text-muted hover:border-accent hover:text-main"
+                      }`}
+                    >
+                      {btn.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[11px] text-faint">Від дати</label>
-                <Input type="date" className="h-8 text-[12px]" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                <Input
+                  type="date"
+                  className="h-8 text-[12px]"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setRangeMode("custom");
+                  }}
+                />
               </div>
               <div>
                 <label className="text-[11px] text-faint">До дати</label>
-                <Input type="date" className="h-8 text-[12px]" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                <Input
+                  type="date"
+                  className="h-8 text-[12px]"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setRangeMode("custom");
+                  }}
+                />
               </div>
             </div>
 
@@ -1088,8 +1108,16 @@ function doPost(e) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mt-2">
-        <Field label="Поточний баланс команди ($)" hint="Якщо < $1000 або < $0 — прийде сповіщення">
+      <div className="grid grid-cols-2 gap-3 mt-2 items-start">
+        <div className="space-y-1.5">
+          <div className="flex flex-col justify-between h-9">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
+              Поточний баланс команди ($)
+            </span>
+            <span className="block text-[10.5px] text-faint">
+              &lt; $1000 або &lt; $0 — сповіщення
+            </span>
+          </div>
           <Input
             type="number"
             step="0.01"
@@ -1097,10 +1125,23 @@ function doPost(e) {
             value={sheetBalance}
             onChange={(e) => setSheetBalance(e.target.value)}
           />
-        </Field>
-        <Field label="Комісія команди (%)">
-          <Input type="number" step="0.1" value={feePercent} onChange={(e) => setFeePercent(e.target.value)} />
-        </Field>
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex flex-col justify-between h-9">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
+              Комісія команди (%)
+            </span>
+            <span className="block text-[10.5px] text-faint">
+              Формула прибутку
+            </span>
+          </div>
+          <Input
+            type="number"
+            step="0.1"
+            value={feePercent}
+            onChange={(e) => setFeePercent(e.target.value)}
+          />
+        </div>
       </div>
 
       <Field

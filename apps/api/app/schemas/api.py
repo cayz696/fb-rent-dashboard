@@ -200,6 +200,8 @@ class DashboardOut(BaseModel):
     off_breakdown: dict[str, int]
     signals_count: int
     clover_last_received: datetime | None = None
+    fbm_spend_today: Decimal | None = None
+    fbm_spend_total: Decimal | None = None
 
 
 # ---- users (admin)

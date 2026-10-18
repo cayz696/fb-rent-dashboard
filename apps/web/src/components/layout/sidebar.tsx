@@ -103,18 +103,18 @@ export function Sidebar({ user }: { user: User }) {
   }
 
   return (
-    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col gap-5 overflow-y-auto border-r border-line bg-surface px-4 py-5">
+    <aside className="sticky top-0 flex h-screen w-[280px] shrink-0 flex-col gap-4 border-r border-line bg-surface px-4 py-5 overflow-visible">
       <div className="flex items-center gap-3 px-2">
-        <div className="grid size-10 place-items-center rounded-md bg-accent font-bold text-on-accent shadow-[0_0_16px_var(--accent-glow)]">
+        <div className="grid size-11 place-items-center rounded-md bg-accent font-bold text-on-accent text-[15px] shadow-[0_0_16px_var(--accent-glow)]">
           FR
         </div>
         <div>
-          <div className="font-semibold leading-tight">FB Rent</div>
-          <div className="text-[12px] text-muted">Ops Control Panel</div>
+          <div className="text-[15px] font-semibold leading-tight">FB Rent</div>
+          <div className="text-[13px] text-muted">Ops Control Panel</div>
         </div>
       </div>
 
-      <nav className="flex flex-col gap-0.5">
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto pr-1">
         {items.map(({ href, label, icon: Icon, count, badge }) => {
           const active = path === href || path.startsWith(href + "/");
           return (
@@ -123,17 +123,17 @@ export function Sidebar({ user }: { user: User }) {
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-md border border-transparent px-3 py-2 text-[13.5px] transition",
+                "flex items-center gap-3 rounded-md border border-transparent px-3.5 py-2.5 text-[15px] transition",
                 active
                   ? "border-line-strong bg-surface-active font-semibold text-main"
                   : "text-muted hover:bg-surface-hover hover:text-main",
               )}
             >
-              <Icon size={16} className={active ? "text-accent" : ""} />
+              <Icon size={18} className={active ? "text-accent" : ""} />
               <span className="flex-1 truncate">{label}</span>
-              {count !== undefined && <span className="font-mono text-[11.5px] text-faint">{count}</span>}
+              {count !== undefined && <span className="font-mono text-[12.5px] text-faint">{count}</span>}
               {badge !== undefined && (
-                <span className="rounded-full bg-accent px-2 font-mono text-[11px] font-bold text-on-accent">
+                <span className="rounded-full bg-accent px-2.5 py-0.5 font-mono text-[11.5px] font-bold text-on-accent">
                   {badge}
                 </span>
               )}
@@ -142,7 +142,7 @@ export function Sidebar({ user }: { user: User }) {
         })}
       </nav>
 
-      <div className="mt-auto space-y-2.5">
+      <div className="mt-auto shrink-0 space-y-2.5">
         <div className="space-y-1.5 rounded-lg border border-line bg-inset p-3 text-[12px]">
           <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-faint">
             <span>Статус шлюзів</span>

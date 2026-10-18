@@ -63,8 +63,24 @@ export default function DashboardPage() {
       />
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <Kpi label="Спенд сьогодні" icon={<CircleDollarSign size={16} />} foot={d?.clover_last_received ? "дані з Clover" : "Clover ще не надсилав дані"}>
-          <span className="font-mono text-[32px] font-bold">{d?.spend_today ? money(d.spend_today) : "—"}</span>
+        <Kpi
+          label="Спенд сьогодні"
+          icon={<CircleDollarSign size={16} />}
+          foot={
+            d?.fbm_spend_today !== undefined && d?.fbm_spend_today !== null
+              ? `FBM Cards (всього ${money(d.fbm_spend_total ?? 0)})`
+              : d?.clover_last_received
+                ? "дані з Clover"
+                : "Очікує першої фіксації"
+          }
+        >
+          <span className="font-mono text-[32px] font-bold text-accent">
+            {d?.fbm_spend_today !== undefined && d?.fbm_spend_today !== null
+              ? money(d.fbm_spend_today)
+              : d?.spend_today
+                ? money(d.spend_today)
+                : "$0.00"}
+          </span>
         </Kpi>
         <Kpi label="Видані / Всього в пулі" icon={<CheckCircle2 size={16} />} foot={`${util}% утилізація пулу`}>
           <span className="font-mono text-[32px] font-bold">{d?.issued ?? "…"}</span>
