@@ -873,25 +873,60 @@ function TeamSheetModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const scriptCode = `function doPost(e) {
+  const scriptCode = `var MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+function getActiveMonthSheet(ss, teamName) {
+  var now = new Date();
+  var mIdx = now.getMonth(); // 0 = Январь, 9 = Октябрь, 10 = Ноябрь...
+  var ruMonth = MONTHS_RU[mIdx].toLowerCase();
+  
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    var sName = sheets[i].getName().toLowerCase();
+    if (sName.indexOf(ruMonth) !== -1) {
+      return sheets[i];
+    }
+  }
+  
+  // Автоматически создаем лист для нового месяца путем копирования предыдущего
+  var baseSheet = sheets[0];
+  var prefix = teamName ? (teamName + "  ") : (baseSheet.getName().split("  ")[0] + "  ");
+  var newSheetName = prefix + MONTHS_RU[mIdx];
+  var newSheet = baseSheet.copyTo(ss);
+  newSheet.setName(newSheetName);
+  ss.setActiveSheet(newSheet);
+  ss.moveActiveSheet(1);
+  
+  // Очищаем спенд прошлого месяца (строки 5+, колонки F+)
+  var lastRow = newSheet.getLastRow();
+  var maxCol = newSheet.getLastColumn();
+  if (lastRow >= 5 && maxCol >= 6) {
+    newSheet.getRange(5, 6, lastRow - 4, maxCol - 5).clearContent();
+  }
+  return newSheet;
+}
+
+function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var maxCols = Math.max(sheet.getLastColumn(), 25);
-    var maxRows = Math.max(sheet.getLastRow(), 30);
-    var headerRow = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = getActiveMonthSheet(ss, data.team_name);
     
-    // Карта дат (стовпці F+)
+    var maxCols = Math.max(sheet.getLastColumn(), 35);
+    var maxRows = Math.max(sheet.getLastRow(), 40);
+    // Строка 2 содержит даты (1/10, 2/10...)
+    var headerRow = sheet.getRange(2, 1, 1, maxCols).getValues()[0];
+    
     var dateMap = {};
     for (var c = 0; c < headerRow.length; c++) {
       var val = String(headerRow[c]).trim();
       if (val) dateMap[val] = c + 1;
     }
     
-    // Карта юзерів (стовпець A, починаючи з рядка 4)
+    // Юзеры в колонке A, начиная со строки 5
     var buyerCol = sheet.getRange(1, 1, maxRows, 1).getValues();
     var buyerRowMap = {};
-    for (var r = 3; r < buyerCol.length; r++) {
+    for (var r = 4; r < buyerCol.length; r++) {
       var bName = String(buyerCol[r][0]).trim().toLowerCase();
       if (bName) buyerRowMap[bName] = r + 1;
     }
@@ -916,20 +951,25 @@ function TeamSheetModal({
       
       for (var dt in b.spends) {
         var cIdx = dateMap[dt];
-        if (!cIdx) {
-          cIdx = sheet.getLastColumn() + 1;
-          sheet.getRange(1, cIdx).setValue(dt);
-          dateMap[dt] = cIdx;
+        if (cIdx) {
+          var val = parseFloat(b.spends[dt]) || 0;
+          if (val > 0) {
+            sheet.getRange(rIdx, cIdx).setValue(val);
+            updated++;
+          }
         }
-        sheet.getRange(rIdx, cIdx).setValue(parseFloat(b.spends[dt]) || 0);
-        updated++;
       }
     }
-    return ContentService.createTextOutput(JSON.stringify({ status: "ok", updated: updated }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "ok",
+      sheet_name: sheet.getName(),
+      updated: updated
+    })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 }`;
 
