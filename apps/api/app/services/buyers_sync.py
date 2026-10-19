@@ -238,6 +238,66 @@ def sync_buyers_from_fbm(db: Session) -> dict:
     }
 
 
+def sync_spends_from_fbm_payments(db: Session, days: int = 7) -> dict:
+    """Підтягує точні транзакції з FBM Payments за останні N днів і розподіляє їх по датах."""
+    if not settings.fbm_api_key:
+        return {"synced_records": 0}
+
+    cutoff_date = today_kyiv() - timedelta(days=days)
+    buyers_by_low = {b.name.lower(): b for b in db.scalars(select(Buyer)).all()}
+    existing_map = {k: v.name for k, v in buyers_by_low.items()}
+
+    with Fbm(settings.fbm_api_url, settings.fbm_api_key, proxy=settings.fbm_proxy or None) as f:
+        cards = f.cards()
+        cards_map = {c.card_id: c for c in cards}
+
+        by_b_dt: dict[tuple[uuid.UUID, date], Decimal] = {}
+        page = 1
+        stop = False
+        while not stop and page <= 50:
+            res = f._raw("/api/client-api/payments", {"perPage": 100, "page": page})
+            items = res.get("data") if isinstance(res, dict) else res
+            if not items:
+                break
+            for it in items:
+                dt_str = it.get("dateTime") or ""
+                if not dt_str:
+                    continue
+                dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00")).date()
+                if dt < cutoff_date:
+                    stop = True
+                    break
+                amt = parse_money(it.get("merchantAmount") or it.get("accountAmount")) or Decimal("0")
+                cid = str(it.get("cardId") or "")
+                card = cards_map.get(cid)
+                c_name = card.name if card else ""
+                b_name, _ = parse_card_identity(c_name, existing_map)
+                if b_name:
+                    b_obj = buyers_by_low.get(b_name.lower())
+                    if b_obj:
+                        key = (b_obj.id, dt)
+                        by_b_dt[key] = by_b_dt.get(key, Decimal("0")) + amt
+            page += 1
+
+    updated = 0
+    for (b_id, dt), val in by_b_dt.items():
+        daily = db.scalar(
+            select(BuyerDailySpend).where(
+                BuyerDailySpend.buyer_id == b_id,
+                BuyerDailySpend.date == dt,
+            )
+        )
+        if not daily:
+            daily = BuyerDailySpend(buyer_id=b_id, date=dt, spend_fbm=val)
+            db.add(daily)
+        else:
+            daily.spend_fbm = val
+        updated += 1
+
+    db.commit()
+    return {"synced_records": updated, "pages_checked": page - 1}
+
+
 def record_card_spends(db: Session, refresh_fbm: bool = False) -> dict:
     """Фіксує поточний спенд по всіх картках FBM у базу (кожні 3–4 год або вручну).
     Зберігає CardSpendLog та оновлює поденний спенд у BuyerDailySpend."""
@@ -275,6 +335,13 @@ def record_card_spends(db: Session, refresh_fbm: bool = False) -> dict:
 
     # Спочатку синхронізуємо юзерів та команди з карток
     sync_buyers_from_fbm(db)
+
+    # При оновленні FBM також звіряємо точні транзакції по календарних датах
+    if refresh_fbm and settings.fbm_api_key:
+        try:
+            sync_spends_from_fbm_payments(db, days=7)
+        except Exception:
+            pass
 
     cards = _get_snapshot_cards(db)
     buyers_by_low: dict[str, Buyer] = {
