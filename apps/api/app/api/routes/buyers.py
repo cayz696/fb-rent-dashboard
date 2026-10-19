@@ -259,7 +259,10 @@ def parse_fbm(db: Session = Depends(get_db), _: User = Depends(can_write)):
 
 @router.post("/snapshot-spend")
 def snapshot_spend(refresh_fbm: bool = False, db: Session = Depends(get_db), _: User = Depends(can_write)):
-    return buyers_sync.record_card_spends(db, refresh_fbm=refresh_fbm)
+    try:
+        return buyers_sync.record_card_spends(db, refresh_fbm=refresh_fbm)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/reconcile")

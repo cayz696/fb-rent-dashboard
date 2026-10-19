@@ -105,12 +105,17 @@ export function Sidebar({ user }: { user: User }) {
   return (
     <aside className="sticky top-0 flex h-screen w-[280px] shrink-0 flex-col gap-4 border-r border-line bg-surface px-4 py-5 overflow-visible">
       <div className="flex items-center gap-3 px-2">
-        <div className="grid size-11 place-items-center rounded-md bg-accent font-bold text-on-accent text-[15px] shadow-[0_0_16px_var(--accent-glow)]">
-          FR
+        <div className="relative size-11 overflow-hidden rounded-xl border border-purple-500/40 shadow-[0_0_16px_rgba(168,85,247,0.35)] shrink-0 bg-black">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="Skull Partners Logo"
+            className="size-full object-cover"
+          />
         </div>
         <div>
-          <div className="text-[15px] font-semibold leading-tight">FB Rent</div>
-          <div className="text-[13px] text-muted">Ops Control Panel</div>
+          <div className="text-[15px] font-semibold leading-tight text-main">Skull Partners</div>
+          <div className="text-[12px] text-muted">Ops Control Panel</div>
         </div>
       </div>
 

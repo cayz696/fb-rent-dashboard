@@ -270,8 +270,8 @@ def record_card_spends(db: Session, refresh_fbm: bool = False) -> dict:
             else:
                 db.add(SystemState(key=SNAPSHOT_KEY, value=payload))
             db.flush()
-        except FbmError:
-            pass
+        except FbmError as e:
+            raise ValueError(f"Помилка FBM Cards: {e}") from e
 
     # Спочатку синхронізуємо юзерів та команди з карток
     sync_buyers_from_fbm(db)

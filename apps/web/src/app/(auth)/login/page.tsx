@@ -41,9 +41,16 @@ export default function LoginPage() {
     <main className="grid min-h-screen place-items-center p-4">
       <div className="panel w-full max-w-sm space-y-6 p-8">
         <div className="flex items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-md bg-accent font-bold text-on-accent shadow-[0_0_16px_var(--accent-glow)]">FR</div>
+          <div className="relative size-12 overflow-hidden rounded-xl border border-purple-500/40 shadow-[0_0_18px_rgba(168,85,247,0.4)] shrink-0 bg-black">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="Skull Partners Logo"
+              className="size-full object-cover"
+            />
+          </div>
           <div>
-            <div className="font-semibold">FB Rent</div>
+            <div className="font-semibold text-[17px] text-main">Skull Partners</div>
             <div className="text-[12px] text-muted">Ops Control Panel</div>
           </div>
         </div>
