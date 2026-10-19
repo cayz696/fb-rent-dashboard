@@ -6,6 +6,7 @@ import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import func, select
@@ -243,6 +244,7 @@ def sync_spends_from_fbm_payments(db: Session, days: int = 7) -> dict:
     if not settings.fbm_api_key:
         return {"synced_records": 0}
 
+    tz_app = ZoneInfo(settings.app_tz)
     cutoff_date = today_kyiv() - timedelta(days=days)
     buyers_by_low = {b.name.lower(): b for b in db.scalars(select(Buyer)).all()}
     existing_map = {k: v.name for k, v in buyers_by_low.items()}
@@ -263,11 +265,12 @@ def sync_spends_from_fbm_payments(db: Session, days: int = 7) -> dict:
                 dt_str = it.get("dateTime") or ""
                 if not dt_str:
                     continue
-                dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00")).date()
+                dt_utc = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+                dt = dt_utc.astimezone(tz_app).date()
                 if dt < cutoff_date:
                     stop = True
                     break
-                amt = parse_money(it.get("merchantAmount") or it.get("accountAmount")) or Decimal("0")
+                amt = parse_money(it.get("accountAmount") or it.get("merchantAmount")) or Decimal("0")
                 cid = str(it.get("cardId") or "")
                 card = cards_map.get(cid)
                 c_name = card.name if card else ""
