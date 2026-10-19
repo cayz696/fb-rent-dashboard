@@ -120,11 +120,20 @@ export default function BuyersPage() {
     setError("");
     setNotice("");
     try {
-      const res = await api<{ ok: boolean; buyers_count?: number }>(`/buyers/teams/${t.id}/push-sheet`, {
-        method: "POST",
-        body: {},
-      });
-      setNotice(`Успішно записано спенд по ${res.buyers_count ?? "всіх"} юзерах у Google-таблицю команди «${t.name}»!`);
+      const res = await api<{ ok: boolean; buyers_count?: number; response?: { updated?: number; sheet_name?: string } }>(
+        `/buyers/teams/${t.id}/push-sheet?days=31`,
+        {
+          method: "POST",
+          body: {},
+        }
+      );
+      const updatedCount = res.response?.updated;
+      const sheetName = res.response?.sheet_name;
+      setNotice(
+        typeof updatedCount === "number"
+          ? `Успішно записано спенд у Google-таблицю («${sheetName || t.name}»): оновлено клітинок: ${updatedCount}!`
+          : `Успішно надіслано спенд по ${res.buyers_count ?? "всіх"} юзерах у Google-таблицю команди «${t.name}»!`
+      );
       mutate();
     } catch (e) {
       setError((e as Error).message);
@@ -932,23 +941,59 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = getActiveMonthSheet(ss, data.team_name);
     
-    var maxCols = Math.max(sheet.getLastColumn(), 35);
-    var maxRows = Math.max(sheet.getLastRow(), 40);
-    // Строка 2 содержит даты (1/10, 2/10...)
-    var headerRow = sheet.getRange(2, 1, 1, maxCols).getValues()[0];
+    var maxCols = Math.max(sheet.getLastColumn(), 45);
+    var maxRows = Math.max(sheet.getLastRow(), 50);
+    
+    // Считываем первые 4 строки (как Date объекты и как отформатированный текст)
+    var rawHeaders = sheet.getRange(1, 1, 4, maxCols).getValues();
+    var dispHeaders = sheet.getRange(1, 1, 4, maxCols).getDisplayValues();
     
     var dateMap = {};
-    for (var c = 0; c < headerRow.length; c++) {
-      var val = String(headerRow[c]).trim();
-      if (val) dateMap[val] = c + 1;
+    function registerDate(d, m, col) {
+      var dayNum = parseInt(d, 10);
+      var monNum = parseInt(m, 10);
+      if (isNaN(dayNum) || isNaN(monNum) || dayNum < 1 || dayNum > 31 || monNum < 1 || monNum > 12) return;
+      var dStr = String(dayNum);
+      var mStr = String(monNum);
+      var dPad = dayNum < 10 ? "0" + dayNum : dStr;
+      var mPad = monNum < 10 ? "0" + monNum : mStr;
+      
+      dateMap[dStr + "/" + mStr] = col;
+      dateMap[dPad + "/" + mPad] = col;
+      dateMap[dStr + "/" + mPad] = col;
+      dateMap[dPad + "/" + mStr] = col;
+      dateMap[dStr + "." + mStr] = col;
+      dateMap[dPad + "." + mPad] = col;
+      dateMap[dStr + "." + mPad] = col;
+      dateMap[dPad + "." + mStr] = col;
+    }
+    
+    for (var r = 0; r < 4; r++) {
+      for (var c = 0; c < maxCols; c++) {
+        var raw = rawHeaders[r][c];
+        if (raw instanceof Date && !isNaN(raw.getTime())) {
+          registerDate(raw.getDate(), raw.getMonth() + 1, c + 1);
+        }
+        var disp = String(dispHeaders[r][c] || "").trim();
+        if (disp) {
+          dateMap[disp] = c + 1;
+          var match = disp.match(/^(\d{1,2})[\/\.](\d{1,2})/);
+          if (match) {
+            registerDate(match[1], match[2], c + 1);
+          }
+        }
+      }
     }
     
     // Юзеры в колонке A, начиная со строки 5
-    var buyerCol = sheet.getRange(1, 1, maxRows, 1).getValues();
+    var buyerColDisp = sheet.getRange(1, 1, maxRows, 1).getDisplayValues();
+    var buyerColRaw = sheet.getRange(1, 1, maxRows, 1).getValues();
     var buyerRowMap = {};
-    for (var r = 4; r < buyerCol.length; r++) {
-      var bName = String(buyerCol[r][0]).trim().toLowerCase();
-      if (bName) buyerRowMap[bName] = r + 1;
+    for (var br = 4; br < maxRows; br++) {
+      var bName = String(buyerColDisp[br][0] || buyerColRaw[br][0] || "").trim().toLowerCase();
+      if (bName && bName !== "разом" && bName !== "итого" && bName !== "total") {
+        buyerRowMap[bName] = br + 1;
+      }
     }
     
     var nextRow = sheet.getLastRow() + 1;

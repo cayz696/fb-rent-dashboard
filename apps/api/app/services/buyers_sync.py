@@ -635,7 +635,7 @@ def fetch_and_sync_team_sheet(db: Session, team: Team) -> dict:
     return sync_team_sheet_csv(db, team, r.text)
 
 
-def push_team_spends_to_sheet(db: Session, team: Team, days: int = 14) -> dict:
+def push_team_spends_to_sheet(db: Session, team: Team, days: int = 31) -> dict:
     """Автоматично записує актуальні дані спенду юзерів команди в Google-таблицю
     через Google Apps Script Webhook або сервісний акаунт Google."""
     buyers = db.scalars(

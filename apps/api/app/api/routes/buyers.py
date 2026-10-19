@@ -500,7 +500,7 @@ def sync_team_sheet(
 @router.post("/teams/{team_id}/push-sheet")
 def push_team_sheet(
     team_id: uuid.UUID,
-    days: int = Query(14, ge=1, le=60),
+    days: int = Query(31, ge=1, le=60),
     db: Session = Depends(get_db),
     _: User = Depends(can_write),
 ):
