@@ -1,3 +1,4 @@
+from typing import Optional, List, Dict, Any
 from __future__ import annotations
 """Усі таблиці з розділу 4 ТЗ. Заборонено зберігати повні номери карт, паролі, cookies, TOTP-секрети акаунтів FB."""
 import uuid
@@ -32,10 +33,10 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(128))
     password_hash: Mapped[str] = mapped_column(Text)
     role: Mapped[Role] = mapped_column(Enum(Role, name="role"), default=Role.viewer)
-    totp_secret: Mapped[str | None] = mapped_column(String(64))
+    totp_secret: Mapped[Optional[str]] = mapped_column(String(64))
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
-    allowed_sections: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    allowed_sections: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String), nullable=True)
     created_at: Mapped[datetime] = ts()
 
 
@@ -43,8 +44,8 @@ class Supplier(Base):
     __tablename__ = "suppliers"
     id: Mapped[uuid.UUID] = pk()
     name: Mapped[str] = mapped_column(String(128))
-    contact: Mapped[str | None] = mapped_column(Text)
-    notes: Mapped[str | None] = mapped_column(Text)
+    contact: Mapped[Optional[str]] = mapped_column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
 
 class Batch(Base):
@@ -61,14 +62,14 @@ class Client(Base):
     __tablename__ = "clients"
     id: Mapped[uuid.UUID] = pk()
     name: Mapped[str] = mapped_column(String(128))
-    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger)
-    telegram_usernames: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
-    terms: Mapped[str | None] = mapped_column(Text)
-    bm_id: Mapped[str | None] = mapped_column(String(64))  # Business Manager ID клієнта (для розшарювання доступу)
+    telegram_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+    telegram_usernames: Mapped[List[str]] = mapped_column(ARRAY(String), default=list)
+    terms: Mapped[Optional[str]] = mapped_column(Text)
+    bm_id: Mapped[Optional[str]] = mapped_column(String(64))  # Business Manager ID клієнта (для розшарювання доступу)
     balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)  # початковий залишок; поточний баланс = він + оплати − нараховане
-    fee_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))  # % від спенду, який клієнт платить нам
+    fee_percent: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2))  # % від спенду, який клієнт платить нам
     status: Mapped[str] = mapped_column(String(32), default="active")
-    notes: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
 
 class Account(Base):
@@ -79,34 +80,34 @@ class Account(Base):
         server_default=text("'FB-' || lpad(nextval('account_code_seq')::text, 4, '0')"),
     )
     stage: Mapped[Stage] = mapped_column(Enum(Stage, name="stage"), default=Stage.purchased, index=True)
-    off_reason: Mapped[OffReason | None] = mapped_column(Enum(OffReason, name="off_reason"))
-    supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
-    batch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("batches.id"))
-    purchase_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    client_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("clients.id"))
-    adspower_profile_id: Mapped[str | None] = mapped_column(Text)
-    ad_account_id: Mapped[str | None] = mapped_column(Text, index=True)
-    fb_user_id: Mapped[str | None] = mapped_column(String(32), index=True)  # 615... (публічний id, не секрет)
-    fb_login: Mapped[str | None] = mapped_column(Text)                        # пошта-логін (ідентифікатор)
-    fb_link: Mapped[str | None] = mapped_column(Text)
-    country: Mapped[str | None] = mapped_column(String(8))
-    adspower_group: Mapped[str | None] = mapped_column(Text)  # поточна група в AdsPower (дзеркало)
-    bm_label: Mapped[str | None] = mapped_column(Text)
-    card_last4: Mapped[str | None] = mapped_column(String(4))
-    timezone: Mapped[str | None] = mapped_column(Text)
-    spend_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    check_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    sold_to: Mapped[str | None] = mapped_column(Text)
-    sale_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    sold_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    notes: Mapped[str | None] = mapped_column(Text)
+    off_reason: Mapped[Optional[OffReason]] = mapped_column(Enum(OffReason, name="off_reason"))
+    supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("suppliers.id"))
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("batches.id"))
+    purchase_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("clients.id"))
+    adspower_profile_id: Mapped[Optional[str]] = mapped_column(Text)
+    ad_account_id: Mapped[Optional[str]] = mapped_column(Text, index=True)
+    fb_user_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)  # 615... (публічний id, не секрет)
+    fb_login: Mapped[Optional[str]] = mapped_column(Text)                        # пошта-логін (ідентифікатор)
+    fb_link: Mapped[Optional[str]] = mapped_column(Text)
+    country: Mapped[Optional[str]] = mapped_column(String(8))
+    adspower_group: Mapped[Optional[str]] = mapped_column(Text)  # поточна група в AdsPower (дзеркало)
+    bm_label: Mapped[Optional[str]] = mapped_column(Text)
+    card_last4: Mapped[Optional[str]] = mapped_column(String(4))
+    timezone: Mapped[Optional[str]] = mapped_column(Text)
+    spend_limit: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    check_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    ready_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    sold_to: Mapped[Optional[str]] = mapped_column(Text)
+    sale_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    sold_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = ts()
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    supplier: Mapped[Supplier | None] = relationship()
-    client: Mapped[Client | None] = relationship()
-    batch: Mapped[Batch | None] = relationship()
+    supplier: Mapped[Optional[Supplier]] = relationship()
+    client: Mapped[Optional[Client]] = relationship()
+    batch: Mapped[Optional[Batch]] = relationship()
 
 
 class AccountEvent(Base):
@@ -115,9 +116,9 @@ class AccountEvent(Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("accounts.id"), index=True)
     type: Mapped[str] = mapped_column(String(48))
-    from_stage: Mapped[Stage | None] = mapped_column(Enum(Stage, name="stage"))
-    to_stage: Mapped[Stage | None] = mapped_column(Enum(Stage, name="stage"))
-    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    from_stage: Mapped[Optional[Stage]] = mapped_column(Enum(Stage, name="stage"))
+    to_stage: Mapped[Optional[Stage]] = mapped_column(Enum(Stage, name="stage"))
+    payload: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     actor: Mapped[str] = mapped_column(String(64))  # user_id | clover | bridge | agent
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
@@ -125,13 +126,13 @@ class AccountEvent(Base):
 class Request(Base):
     __tablename__ = "requests"
     id: Mapped[uuid.UUID] = pk()
-    client_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("clients.id"))
+    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("clients.id"))
     raw_text: Mapped[str] = mapped_column(Text)
-    message_link: Mapped[str | None] = mapped_column(Text)
-    parsed: Mapped[dict | None] = mapped_column(JSONB)
+    message_link: Mapped[Optional[str]] = mapped_column(Text)
+    parsed: Mapped[Optional[dict]] = mapped_column(JSONB)
     status: Mapped[RequestStatus] = mapped_column(Enum(RequestStatus, name="request_status"), default=RequestStatus.new)
-    proposed_account_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), default=list)
-    approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    proposed_account_ids: Mapped[List[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), default=list)
+    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = ts()
 
 
@@ -139,15 +140,15 @@ class SpendSnapshot(Base):
     __tablename__ = "spend_snapshots"
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     ad_account_id: Mapped[str] = mapped_column(Text, index=True)
-    account_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("accounts.id"), index=True)
+    account_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("accounts.id"), index=True)
     date: Mapped[date] = mapped_column(Date)
-    spend_today: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    spend_total: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    spend_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    ads_active: Mapped[int | None] = mapped_column(Integer)
-    ads_issues: Mapped[int | None] = mapped_column(Integer)
-    status_raw: Mapped[str | None] = mapped_column(Text)
-    raw: Mapped[dict | None] = mapped_column(JSONB)
+    spend_today: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    spend_total: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    spend_limit: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    ads_active: Mapped[Optional[int]] = mapped_column(Integer)
+    ads_issues: Mapped[Optional[int]] = mapped_column(Integer)
+    status_raw: Mapped[Optional[str]] = mapped_column(Text)
+    raw: Mapped[Optional[dict]] = mapped_column(JSONB)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -155,19 +156,19 @@ class BridgeCommand(Base):
     __tablename__ = "bridge_commands"
     id: Mapped[uuid.UUID] = pk()
     command: Mapped[str] = mapped_column(String(48))
-    args: Mapped[dict] = mapped_column(JSONB, default=dict)
+    args: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     status: Mapped[CommandStatus] = mapped_column(Enum(CommandStatus, name="command_status"), default=CommandStatus.pending)
-    result: Mapped[dict | None] = mapped_column(JSONB)
+    result: Mapped[Optional[dict]] = mapped_column(JSONB)
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = ts()
-    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    done_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
 class SystemState(Base):
     """Ключ-значення для службового стану (напр. останній сигнал від bridge)."""
     __tablename__ = "system_state"
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
-    value: Mapped[dict] = mapped_column(JSONB, default=dict)
+    value: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
@@ -178,7 +179,7 @@ class ClientPayment(Base):
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     paid_at: Mapped[date] = mapped_column(Date, server_default=func.current_date())
-    note: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[Optional[str]] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = ts()
 
@@ -188,15 +189,15 @@ class Team(Base):
     __tablename__ = "teams"
     id: Mapped[uuid.UUID] = pk()
     name: Mapped[str] = mapped_column(String(128), unique=True)
-    sheet_url: Mapped[str | None] = mapped_column(Text)
-    sheet_gid: Mapped[str | None] = mapped_column(String(32))
-    sheet_webhook_url: Mapped[str | None] = mapped_column(Text)
-    sheet_balance: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    topup_total: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    spend_total_sheet: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    sheet_url: Mapped[Optional[str]] = mapped_column(Text)
+    sheet_gid: Mapped[Optional[str]] = mapped_column(String(32))
+    sheet_webhook_url: Mapped[Optional[str]] = mapped_column(Text)
+    sheet_balance: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    topup_total: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    spend_total_sheet: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
     fee_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("7.00"), server_default=text("7.00"))
-    last_sheet_sync: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    notes: Mapped[str | None] = mapped_column(Text)
+    last_sheet_sync: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = ts()
 
 
@@ -205,14 +206,14 @@ class Buyer(Base):
     __tablename__ = "buyers"
     id: Mapped[uuid.UUID] = pk()
     name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
-    team_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teams.id"), index=True)
+    team_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("teams.id"), index=True)
     is_priority: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
-    fbm_owner: Mapped[str | None] = mapped_column(String(128))
-    accounts_count: Mapped[int | None] = mapped_column(Integer)
-    notes: Mapped[str | None] = mapped_column(Text)
+    fbm_owner: Mapped[Optional[str]] = mapped_column(String(128))
+    accounts_count: Mapped[Optional[int]] = mapped_column(Integer)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = ts()
 
-    team: Mapped[Team | None] = relationship()
+    team: Mapped[Optional[Team]] = relationship()
 
 
 class CardSpendLog(Base):
@@ -220,12 +221,12 @@ class CardSpendLog(Base):
     __tablename__ = "card_spend_logs"
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     card_id: Mapped[str] = mapped_column(String(64), index=True)
-    last4: Mapped[str | None] = mapped_column(String(8))
-    card_name: Mapped[str | None] = mapped_column(Text)
-    buyer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("buyers.id"), index=True)
-    team_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teams.id"), index=True)
-    account_name: Mapped[str | None] = mapped_column(String(64))
-    account_balance: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    last4: Mapped[Optional[str]] = mapped_column(String(8))
+    card_name: Mapped[Optional[str]] = mapped_column(Text)
+    buyer_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("buyers.id"), index=True)
+    team_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("teams.id"), index=True)
+    account_name: Mapped[Optional[str]] = mapped_column(String(64))
+    account_balance: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
     spend_cumulative: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     spend_delta: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     date: Mapped[date] = mapped_column(Date, index=True)
@@ -239,7 +240,7 @@ class BuyerDailySpend(Base):
     buyer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("buyers.id"), index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
     spend_fbm: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
-    spend_sheet: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    spend_sheet: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
@@ -252,7 +253,7 @@ class FbmReconciliation(Base):
     db_total_spend: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     fbm_total_spend: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     diff_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
-    discrepancies: Mapped[list] = mapped_column(JSONB, default=list)
+    discrepancies: Mapped[List[Any]] = mapped_column(JSONB, default=list)
 
 
 class ExpenseCategory(Base):
@@ -271,7 +272,7 @@ class Expense(Base):
     category_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("expense_categories.id"), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     spent_at: Mapped[date] = mapped_column(Date, server_default=func.current_date(), index=True)
-    description: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[Optional[str]] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = ts()
 
