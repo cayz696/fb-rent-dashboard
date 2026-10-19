@@ -1,3 +1,4 @@
+from __future__ import annotations
 """CLI: python -m app.cli create-user <username> <name> <role> [--password P]  |  seed-demo"""
 import argparse
 import getpass

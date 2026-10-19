@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Сповіщення: агрегація заявок, сигналів, помилок bridge."""
 from datetime import datetime, timedelta, timezone
 

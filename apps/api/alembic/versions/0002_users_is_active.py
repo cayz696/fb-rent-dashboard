@@ -1,3 +1,4 @@
+from __future__ import annotations
 """users is_active
 
 Revision ID: 0002

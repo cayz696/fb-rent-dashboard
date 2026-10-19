@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Мапери FBM-pay на прикладах з офіційної доки. Без мережі."""
 import httpx
 

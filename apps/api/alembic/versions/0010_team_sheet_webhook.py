@@ -1,3 +1,4 @@
+from __future__ import annotations
 """team sheet webhook url
 
 Revision ID: 0010

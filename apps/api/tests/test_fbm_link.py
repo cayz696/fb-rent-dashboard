@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Звʼязок картки FBM з акаунтом по last4 (зі знімка в system_state)."""
 from app.core.db import SessionLocal
 from app.models import SystemState

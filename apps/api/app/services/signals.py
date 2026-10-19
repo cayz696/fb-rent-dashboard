@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Сигнали (розділ 8 ТЗ). Обчислюються на льоту при запиті (дешево на нашому масштабі);
 окрема фонова задача кожні 15 хв знадобиться, коли сигнали почнуть надсилатись у Telegram."""
 from datetime import datetime, timedelta, timezone

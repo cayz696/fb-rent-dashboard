@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Заявки на видачу. Джерело: ручне створення в UI (Telegram підключиться пізніше і створюватиме ті самі заявки)."""
 import uuid
 from decimal import Decimal

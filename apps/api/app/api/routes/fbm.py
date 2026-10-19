@@ -1,3 +1,4 @@
+from __future__ import annotations
 """FBM-pay у дашборді: інвентар карток (знімок), 3DS-коди (живі). Сервер сам ходить у FBM API (ключ у .env).
 §4: зберігаємо лише масковані дані (last4), повний номер не чіпаємо; 3DS-коди не персистимо."""
 from datetime import datetime, timezone

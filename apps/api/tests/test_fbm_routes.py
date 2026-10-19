@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Ендпоінти FBM: знімок карток, зв'язок по last4, доступ. Мокаємо FBM-клієнт (без мережі)."""
 import app.api.routes.fbm as fbm_route
 from app.integrations.fbm import FbmCard, FbmCode

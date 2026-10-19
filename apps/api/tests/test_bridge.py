@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Приймання MVP-4: команда «Створити профіль» чекає в черзі, поки bridge офлайн, і виконується після підключення."""
 import pytest
 from fastapi.testclient import TestClient

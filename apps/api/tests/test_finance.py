@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Фінанси: нарахування % від спенду, оплати, баланс, маржа. Доступ лише admin."""
 from app.core.config import settings
 

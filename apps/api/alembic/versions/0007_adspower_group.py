@@ -1,3 +1,4 @@
+from __future__ import annotations
 """adspower_group
 
 Revision ID: 0007

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from tests.conftest import login, make_user
 
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Імпорт замовлення зі стоку → реєстрація акаунтів + готовий файл для AdsPower.
 Замінює ручний крок з ChatGPT. Секрети (паролі/cookies/2FA) не зберігаються (ТЗ §4)."""
 import uuid

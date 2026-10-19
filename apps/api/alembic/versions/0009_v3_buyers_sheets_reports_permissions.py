@@ -1,3 +1,4 @@
+from __future__ import annotations
 """v3 buyers teams sheets reports permissions
 
 Revision ID: 0009

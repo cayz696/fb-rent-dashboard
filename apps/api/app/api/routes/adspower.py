@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Дзеркало AdsPower у дашборді: тягнемо список профілів через bridge (тільки читання),
 зіставляємо з нашими акаунтами. Секрети з AdsPower не зберігаємо (ТЗ §4)."""
 from datetime import datetime, timezone

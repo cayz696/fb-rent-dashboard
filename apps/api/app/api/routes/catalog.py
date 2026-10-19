@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Клієнти, постачальники, партії."""
 import uuid
 

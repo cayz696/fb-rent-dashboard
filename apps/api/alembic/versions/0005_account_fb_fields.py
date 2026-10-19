@@ -1,3 +1,4 @@
+from __future__ import annotations
 """account fb fields
 
 Revision ID: 0005

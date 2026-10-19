@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Звʼязок карток FBM з акаунтами по card_last4 (зі знімка fbm_cards_snapshot).
 Дає спенд/статус/баланс картки на рівні акаунта. §4: лише масковані дані."""
 from decimal import Decimal

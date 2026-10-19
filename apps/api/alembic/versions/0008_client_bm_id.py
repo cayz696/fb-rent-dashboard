@@ -1,3 +1,4 @@
+from __future__ import annotations
 """client bm_id
 
 Revision ID: 0008

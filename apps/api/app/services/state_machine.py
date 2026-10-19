@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Статус-машина акаунта (розділ 5 ТЗ). Чиста логіка без БД."""
 from dataclasses import dataclass
 

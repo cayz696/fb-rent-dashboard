@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Маршрути для Юзерів (Баєрів), Команд, Google-таблиць, фіксації спенду кожні 3–4 год та добової звірки з FBM."""
 import csv
 import io

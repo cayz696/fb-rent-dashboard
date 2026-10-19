@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Клієнт FBM-pay (картки, спенд, 3DS) + мапери. Авторизація — заголовок X-API-Key.
 
 Реальні особливості API (звірено з живим): Laravel-пагінація (meta.last_page, page=), perPage ≤ 100,

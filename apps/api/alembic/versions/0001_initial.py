@@ -1,3 +1,4 @@
+from __future__ import annotations
 """initial
 
 Revision ID: 0001

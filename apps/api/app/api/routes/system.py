@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Керування десктоп-системою та оновленням через GitHub."""
 from pathlib import Path
 import subprocess

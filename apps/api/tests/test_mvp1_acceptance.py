@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Приймання MVP-1: акаунт проходить purchased → issued, кожен крок у журналі з автором; недозволений перехід → 409."""
 from app.models import Role
 from tests.conftest import login, make_user

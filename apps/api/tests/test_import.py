@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Імпорт order.txt → акаунти + файл AdsPower. Перевірка на реальному зразку з відео."""
 import io
 

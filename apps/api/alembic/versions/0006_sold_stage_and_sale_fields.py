@@ -1,3 +1,4 @@
+from __future__ import annotations
 """sold stage and sale fields
 
 Revision ID: 0006

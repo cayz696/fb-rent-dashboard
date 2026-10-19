@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Парсер замовлення зі стоку (order_*.txt) → профіль AdsPower. Детерміновано, без LLM.
 
 Замінює ручний крок «прогнати order.txt через ChatGPT» (див. docs/process-analysis.md, крок 4).

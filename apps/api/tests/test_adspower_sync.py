@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Дзеркало AdsPower → дашборд: синхронізація профілів (тільки читання, без секретів)."""
 from app.core.config import settings
 from app.main import app

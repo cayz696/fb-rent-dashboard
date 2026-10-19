@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Сповіщення: єдиний список актуального, що потребує уваги — заявки, сигнали, помилки bridge.
 Агрегується на льоту (без окремої таблиці). «Непрочитані» клієнт рахує по last_seen."""
 from datetime import datetime, timedelta, timezone

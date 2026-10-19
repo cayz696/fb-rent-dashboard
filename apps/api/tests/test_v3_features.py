@@ -1,3 +1,4 @@
+from __future__ import annotations
 from app.core.db import SessionLocal
 from app.models import SystemState
 from app.services.buyers_sync import parse_card_identity

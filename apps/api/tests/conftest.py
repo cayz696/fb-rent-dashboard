@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 
 os.environ["DATABASE_URL"] = "postgresql+psycopg://fbrent:fbrent@localhost:5440/fbrent_test"

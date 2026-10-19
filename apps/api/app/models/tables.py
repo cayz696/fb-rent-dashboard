@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Усі таблиці з розділу 4 ТЗ. Заборонено зберігати повні номери карт, паролі, cookies, TOTP-секрети акаунтів FB."""
 import uuid
 from datetime import date, datetime

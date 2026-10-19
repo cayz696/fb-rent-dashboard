@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Черга команд для bridge (AdsPower). Сервер ніколи не звертається до макбука напряму:
 bridge підключається сам (WebSocket), забирає `pending` команди й повертає результат."""
 import uuid

@@ -1,3 +1,4 @@
+from __future__ import annotations
 CHAIN = ["in_adspower", "bm_created", "phone_linked", "warmup", "card_linked", "checking", "ready"]
 
 

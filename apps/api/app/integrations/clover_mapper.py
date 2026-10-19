@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Мапер Clover Spend Export → структурні поля.
 
 Формат payload від Clover ПОКИ НЕВІДОМИЙ (ТЗ §6.1, §12). Тому це v0: терпимий до різних назв полів і форм
