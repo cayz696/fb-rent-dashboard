@@ -1,5 +1,5 @@
-from typing import Optional, List, Dict, Any
 from __future__ import annotations
+from typing import Optional, List, Dict, Any
 """Усі таблиці з розділу 4 ТЗ. Заборонено зберігати повні номери карт, паролі, cookies, TOTP-секрети акаунтів FB."""
 import uuid
 from datetime import date, datetime
