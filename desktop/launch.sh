@@ -3,7 +3,8 @@
 set -e
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-ROOT_DIR="/Users/emojiestore/dashboard"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$ROOT_DIR/.logs"
 mkdir -p "$LOG_DIR"
 
