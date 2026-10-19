@@ -584,11 +584,11 @@ def sync_team_sheet_csv(db: Session, team: Team, csv_content: str) -> dict:
     for r_idx, row in enumerate(reader[:10]):
         for c_idx, cell in enumerate(row):
             c_str = cell.strip()
-            # Комісія, напр. 'Комс 7%'
+            # Комісія, напр. 'Комс 7%' (встановлюємо лише якщо ще не була задана)
             m_fee = re.search(r"комс\s*(\d+(?:[.,]\d+)?)\s*%", c_str, re.I)
             if m_fee:
                 fee = parse_money(m_fee.group(1))
-                if fee is not None:
+                if fee is not None and (team.fee_percent is None or team.fee_percent == Decimal("7.00")):
                     team.fee_percent = fee
 
             # Спенд пополнено

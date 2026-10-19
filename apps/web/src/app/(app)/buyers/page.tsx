@@ -997,8 +997,19 @@ function doPost(e) {
     }
     
     var nextRow = sheet.getLastRow() + 1;
-    var updated = 0;
-    
+    // Обновляем ячейку комиссии (например, 'Комс 7%') если она есть в шапке
+    if (data.fee_percent) {
+      var feeText = "Комс " + data.fee_percent + "%";
+      for (var hr = 0; hr < 4; hr++) {
+        for (var hc = 0; hc < maxCols; hc++) {
+          var hVal = String(dispHeaders[hr][hc] || "");
+          if (/комс\s*\d+(?:[.,]\d+)?\s*%/i.test(hVal)) {
+            sheet.getRange(hr + 1, hc + 1).setValue(feeText);
+          }
+        }
+      }
+    }
+
     for (var i = 0; i < data.buyers.length; i++) {
       var b = data.buyers[i];
       var bLower = b.name.trim().toLowerCase();
