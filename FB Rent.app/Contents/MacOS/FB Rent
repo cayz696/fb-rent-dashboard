@@ -1,7 +1,13 @@
 #!/bin/zsh
-APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
-if [ -f "$APP_DIR/desktop/launch.sh" ]; then
-  exec "$APP_DIR/desktop/launch.sh"
-else
-  exec "$HOME/dashboard/desktop/launch.sh"
+TARGET=""
+if [ -f "$HOME/fb-rent-dashboard/desktop/launch.sh" ]; then
+  TARGET="$HOME/fb-rent-dashboard/desktop/launch.sh"
+elif [ -f "$HOME/dashboard/desktop/launch.sh" ]; then
+  TARGET="$HOME/dashboard/desktop/launch.sh"
+elif [ -f "$(cd "$(dirname "$0")/../../.." && pwd)/desktop/launch.sh" ]; then
+  TARGET="$(cd "$(dirname "$0")/../../.." && pwd)/desktop/launch.sh"
+fi
+
+if [ -n "$TARGET" ]; then
+  exec "$TARGET"
 fi

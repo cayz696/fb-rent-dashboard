@@ -5,6 +5,16 @@ set -e
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Якщо скрипт запущено з /Applications/FB Rent.app
+if [ ! -d "$ROOT_DIR/apps" ]; then
+  if [ -d "$HOME/fb-rent-dashboard/apps" ]; then
+    ROOT_DIR="$HOME/fb-rent-dashboard"
+  elif [ -d "$HOME/dashboard/apps" ]; then
+    ROOT_DIR="$HOME/dashboard"
+  fi
+fi
+
 LOG_DIR="$ROOT_DIR/.logs"
 mkdir -p "$LOG_DIR"
 
