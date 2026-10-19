@@ -246,7 +246,7 @@ def record_card_spends(db: Session, refresh_fbm: bool = False) -> dict:
 
     if refresh_fbm and settings.fbm_api_key:
         try:
-            with Fbm(settings.fbm_api_url, settings.fbm_api_key) as f:
+            with Fbm(settings.fbm_api_url, settings.fbm_api_key, proxy=settings.fbm_proxy or None) as f:
                 live_cards = f.cards()
             rows = [
                 {
@@ -378,7 +378,7 @@ def reconcile_fbm_spend(db: Session, fetch_live: bool = False) -> FbmReconciliat
     now = datetime.now(timezone.utc)
     if fetch_live and settings.fbm_api_key:
         try:
-            with Fbm(settings.fbm_api_url, settings.fbm_api_key) as f:
+            with Fbm(settings.fbm_api_url, settings.fbm_api_key, proxy=settings.fbm_proxy or None) as f:
                 live = f.cards()
             fbm_cards = [
                 {

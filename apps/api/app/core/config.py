@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     bridge_token: str = ""
     fbm_api_url: str = "https://fbm-pay.com"
     fbm_api_key: str = ""
+    fbm_proxy: str = ""
 
 
 settings = Settings()

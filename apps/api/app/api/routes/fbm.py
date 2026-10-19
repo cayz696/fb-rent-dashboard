@@ -21,7 +21,7 @@ SNAPSHOT_KEY = "fbm_cards_snapshot"
 def _client() -> Fbm:
     if not settings.fbm_api_key:
         raise HTTPException(503, "FBM не налаштовано (FBM_API_KEY у .env)")
-    return Fbm(settings.fbm_api_url, settings.fbm_api_key)
+    return Fbm(settings.fbm_api_url, settings.fbm_api_key, proxy=settings.fbm_proxy or None)
 
 
 class FbmCardView(BaseModel):

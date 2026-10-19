@@ -129,9 +129,23 @@ def map_code(c: dict) -> FbmCode:
 
 
 class Fbm:
-    def __init__(self, base_url: str, api_key: str, transport: httpx.BaseTransport | None = None):
-        self._http = httpx.Client(base_url=base_url.rstrip("/"), headers={"X-API-Key": api_key},
-                                  timeout=30, transport=transport)
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        proxy: str | None = None,
+        transport: httpx.BaseTransport | None = None,
+    ):
+        kwargs = {}
+        if proxy and proxy.strip():
+            kwargs["proxy"] = proxy.strip()
+        self._http = httpx.Client(
+            base_url=base_url.rstrip("/"),
+            headers={"X-API-Key": api_key},
+            timeout=30,
+            transport=transport,
+            **kwargs,
+        )
 
     def close(self):
         self._http.close()
