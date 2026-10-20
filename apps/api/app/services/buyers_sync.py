@@ -7,6 +7,7 @@ import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -533,15 +534,69 @@ def reconcile_fbm_spend(db: Session, fetch_live: bool = False) -> FbmReconciliat
     return rec
 
 
+_SHEET_HOSTS = frozenset({"docs.google.com"})
+_WEBHOOK_HOSTS = frozenset({"script.google.com"})
+_REDIRECT_HOSTS = _SHEET_HOSTS | _WEBHOOK_HOSTS | frozenset({"googleusercontent.com"})
+
+
+def validate_google_url(url: str | None, kind: str) -> str | None:
+    """Порожній рядок → None. Інакше лише https на docs.google.com (таблиця) або script.google.com (webhook)."""
+    if url is None:
+        return None
+    raw = url.strip()
+    if not raw:
+        return None
+    allowed = _SHEET_HOSTS if kind == "sheet" else _WEBHOOK_HOSTS
+    label = "Посилання на таблицю" if kind == "sheet" else "Webhook"
+    parsed = urlparse(raw)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or host not in allowed or parsed.username or parsed.password or parsed.port:
+        hosts = ", ".join(sorted(allowed))
+        raise ValueError(f"{label} має бути https://{hosts}/… без логіна, пароля і порту")
+    return raw
+
+
+def _redirect_host_ok(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    if urlparse(url).scheme != "https":
+        return False
+    return host in _REDIRECT_HOSTS or host.endswith(".googleusercontent.com")
+
+
+def _google_request(method: str, url: str, **kwargs) -> httpx.Response:
+    """Ходить лише на дозволений Google URL і не слідує редіректу за межі Google."""
+    current = url
+    with httpx.Client(timeout=kwargs.pop("timeout", 20), follow_redirects=False) as client:
+        for _ in range(4):
+            res = client.request(method, current, **kwargs)
+            if res.status_code in (301, 302, 303, 307, 308):
+                loc = res.headers.get("location")
+                if not loc or not _redirect_host_ok(loc):
+                    raise ValueError("Редирект Google веде за межі дозволених хостів")
+                current = loc
+                if res.status_code in (301, 302, 303):
+                    method = "GET"
+                    kwargs.pop("json", None)
+                    kwargs.pop("content", None)
+                continue
+            return res
+    raise ValueError("Забагато редіректів Google")
+
+
 def build_google_csv_url(sheet_url: str, gid: str | None = None) -> str:
     """Перетворює стандартне посилання Google Sheets на пряме посилання експорту CSV."""
-    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
+    checked = validate_google_url(sheet_url, "sheet")
+    if not checked:
+        raise ValueError("У команди не вказано посилання на таблицю (sheet_url)")
+    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", checked)
     if not m:
-        return sheet_url
+        raise ValueError("Посилання має бути на документ Google Sheets (/spreadsheets/d/…)")
     doc_id = m.group(1)
     if not gid:
-        g_match = re.search(r"[#&?]gid=(\d+)", sheet_url)
+        g_match = re.search(r"[#&?]gid=(\d+)", checked)
         gid = g_match.group(1) if g_match else "0"
+    if not str(gid).isdigit():
+        raise ValueError("gid таблиці має бути числом")
     return f"https://docs.google.com/spreadsheets/d/{doc_id}/export?format=csv&gid={gid}"
 
 
@@ -699,7 +754,7 @@ def fetch_and_sync_team_sheet(db: Session, team: Team) -> dict:
         raise ValueError("У команди не вказано посилання на таблицю (sheet_url)")
     csv_url = build_google_csv_url(team.sheet_url, team.sheet_gid)
     try:
-        r = httpx.get(csv_url, follow_redirects=True, timeout=20)
+        r = _google_request("GET", csv_url, timeout=20)
         r.raise_for_status()
     except httpx.HTTPError as e:
         raise ValueError(f"Не вдалося прочитати таблицю: {e}") from e
@@ -748,11 +803,13 @@ def push_team_spends_to_sheet(db: Session, team: Team, days: int = 31) -> dict:
     }
 
     if team.sheet_webhook_url:
+        webhook = validate_google_url(team.sheet_webhook_url, "webhook")
+        if not webhook:
+            raise ValueError("У команди не вказано Webhook URL")
         try:
-            with httpx.Client(timeout=30, follow_redirects=True) as client:
-                res = client.post(team.sheet_webhook_url, json=payload)
-                res.raise_for_status()
-                data = res.json() if "application/json" in res.headers.get("content-type", "") else {"raw": res.text}
+            res = _google_request("POST", webhook, json=payload, timeout=30)
+            res.raise_for_status()
+            data = res.json() if "application/json" in res.headers.get("content-type", "") else {"raw": res.text}
             team.last_sheet_sync = datetime.now(timezone.utc)
             db.commit()
             return {"ok": True, "method": "webhook", "buyers_count": len(buyers), "response": data}

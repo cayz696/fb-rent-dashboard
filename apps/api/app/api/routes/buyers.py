@@ -441,11 +441,16 @@ def create_team(body: TeamIn, db: Session = Depends(get_db), _: User = Depends(c
     clean = body.name.strip()
     if db.scalar(select(Team).where(func.lower(Team.name) == clean.lower())):
         raise HTTPException(409, "Команда з такою назвою вже існує")
+    try:
+        sheet_url = buyers_sync.validate_google_url(body.sheet_url, "sheet")
+        webhook = buyers_sync.validate_google_url(body.sheet_webhook_url, "webhook")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     t = Team(
         name=clean,
-        sheet_url=body.sheet_url,
+        sheet_url=sheet_url,
         sheet_gid=body.sheet_gid,
-        sheet_webhook_url=body.sheet_webhook_url,
+        sheet_webhook_url=webhook,
         sheet_balance=body.sheet_balance,
         fee_percent=body.fee_percent,
         notes=body.notes,
@@ -463,12 +468,15 @@ def patch_team(team_id: uuid.UUID, body: TeamPatch, db: Session = Depends(get_db
         raise HTTPException(404, "Команду не знайдено")
     if body.name is not None:
         t.name = body.name.strip()
-    if "sheet_url" in body.model_fields_set:
-        t.sheet_url = body.sheet_url
+    try:
+        if "sheet_url" in body.model_fields_set:
+            t.sheet_url = buyers_sync.validate_google_url(body.sheet_url, "sheet")
+        if "sheet_webhook_url" in body.model_fields_set:
+            t.sheet_webhook_url = buyers_sync.validate_google_url(body.sheet_webhook_url, "webhook")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     if "sheet_gid" in body.model_fields_set:
         t.sheet_gid = body.sheet_gid
-    if "sheet_webhook_url" in body.model_fields_set:
-        t.sheet_webhook_url = body.sheet_webhook_url
     if "sheet_balance" in body.model_fields_set:
         t.sheet_balance = body.sheet_balance
     if "topup_total" in body.model_fields_set:

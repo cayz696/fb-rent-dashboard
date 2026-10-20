@@ -4,6 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { Card, CardHeader, Empty, Modal } from "@/components/ui";
 import { fetcher } from "@/lib/api";
+import { canWrite, useMe } from "@/lib/session";
 import type { Account, FbmCode } from "@/lib/types";
 import { fmtDateTime, money } from "@/lib/utils";
 
@@ -11,7 +12,9 @@ const statusColor = (s: string | null) =>
   s === "VALID CARD" ? "var(--success)" : s?.includes("BLOCK") ? "var(--stage-off-fg)" : "var(--warning)";
 
 export function AccountFbmCard({ acc }: { acc: Account }) {
+  const { user } = useMe();
   const [codes, setCodes] = useState(false);
+  const allowCodes = canWrite(user);
   if (!acc.card_last4) {
     return (
       <Card>
@@ -23,7 +26,7 @@ export function AccountFbmCard({ acc }: { acc: Account }) {
   return (
     <Card>
       <CardHeader title="Картка FBM" icon={<CreditCard size={16} />}
-        right={acc.card_fbm_id && <button onClick={() => setCodes(true)} className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-surface-hover px-2 py-1 text-[11px] text-muted hover:text-main cursor-pointer"><KeyRound size={12} />3DS-коди</button>} />
+        right={acc.card_fbm_id && allowCodes && <button onClick={() => setCodes(true)} className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-surface-hover px-2 py-1 text-[11px] text-muted hover:text-main cursor-pointer"><KeyRound size={12} />3DS-коди</button>} />
       {!acc.card_fbm_id ? (
         <div className="px-5 py-6 text-[13px] text-muted">Картку •• {acc.card_last4} не знайдено у знімку FBM. Оновіть «Картки» або перевірте last4.</div>
       ) : (
@@ -37,7 +40,7 @@ export function AccountFbmCard({ acc }: { acc: Account }) {
           <div className="col-span-2 bg-surface px-5 py-2 text-[12px] text-muted">{acc.card_name}</div>
         </div>
       )}
-      {codes && acc.card_fbm_id && <CodesModal cardId={acc.card_fbm_id} last4={acc.card_last4} onClose={() => setCodes(false)} />}
+      {codes && allowCodes && acc.card_fbm_id && <CodesModal cardId={acc.card_fbm_id} last4={acc.card_last4} onClose={() => setCodes(false)} />}
     </Card>
   );
 }

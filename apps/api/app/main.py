@@ -5,12 +5,14 @@ import os
 import time
 from collections import defaultdict, deque
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.api.access import access_rule, has_section
 from app.api.routes import accounts, adspower, auth, bridge, buyers, catalog, clover, dashboard, fbm, finance, imports, notifications, reports, requests, system, users
 from app.core.db import SessionLocal
-from app.models import Team
+from app.core.security import COOKIE, read_token
+from app.models import Role, Team, User
 from app.services import buyers_sync
 from sqlalchemy import select
 
@@ -63,6 +65,23 @@ app = FastAPI(title="FB Rent API", docs_url="/api/docs", openapi_url="/api/opena
 _hits: dict[str, deque] = defaultdict(deque)
 LIMITS = {"/api/auth/login": 10, "/api/auth/2fa/verify": 10, "/api/clover/spend": 120}  # запитів/хв з одного IP
 WINDOW = 60
+
+
+@app.middleware("http")
+async def section_guard(request: Request, call_next):
+    rule = access_rule(request.url.path)
+    if rule.kind == "public":
+        return await call_next(request)
+    uid = read_token(request.cookies.get(COOKIE), "session") if request.cookies.get(COOKIE) else None
+    with SessionLocal() as db:
+        user = db.get(User, uid) if uid else None
+        if not user or not user.is_active:
+            return JSONResponse({"detail": "Потрібен вхід"}, status_code=401)
+        if rule.kind == "writer_section" and user.role not in (Role.admin, Role.operator):
+            return JSONResponse({"detail": "Недостатньо прав"}, status_code=403)
+        if rule.kind != "auth" and not any(has_section(user, s) for s in rule.sections):
+            return JSONResponse({"detail": "Немає доступу до розділу"}, status_code=403)
+    return await call_next(request)
 
 
 @app.middleware("http")
