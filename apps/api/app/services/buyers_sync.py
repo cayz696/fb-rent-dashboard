@@ -411,18 +411,22 @@ def record_card_spends(db: Session, refresh_fbm: bool = False) -> dict:
             key = (buyer.id, today)
             buyer_deltas[key] = buyer_deltas.get(key, Decimal("0")) + delta
 
-    for (b_id, dt), d_val in buyer_deltas.items():
-        daily = db.scalar(
-            select(BuyerDailySpend).where(
-                BuyerDailySpend.buyer_id == b_id,
-                BuyerDailySpend.date == dt,
+    # Якщо налаштований FBM API, розрахунок спенду ведеться за точними транзакціями платежів
+    # (sync_spends_from_fbm_payments), тому додатково плюсувати дельти не потрібно,
+    # щоб не виникало подвійного додавання.
+    if not (refresh_fbm and settings.fbm_api_key):
+        for (b_id, dt), d_val in buyer_deltas.items():
+            daily = db.scalar(
+                select(BuyerDailySpend).where(
+                    BuyerDailySpend.buyer_id == b_id,
+                    BuyerDailySpend.date == dt,
+                )
             )
-        )
-        if not daily:
-            daily = BuyerDailySpend(buyer_id=b_id, date=dt, spend_fbm=d_val)
-            db.add(daily)
-        else:
-            daily.spend_fbm = (daily.spend_fbm or Decimal("0")) + d_val
+            if not daily:
+                daily = BuyerDailySpend(buyer_id=b_id, date=dt, spend_fbm=d_val)
+                db.add(daily)
+            else:
+                daily.spend_fbm = (daily.spend_fbm or Decimal("0")) + d_val
 
     tracker_state = {
         "last_recorded_at": now.isoformat(),
