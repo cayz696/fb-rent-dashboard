@@ -34,19 +34,20 @@ cd "$ROOT_DIR"
 
 if [ ! -f .env ]; then
   echo "⚙️ Створення конфігурації .env..."
-  cat << 'ENVEOF' > .env
+  rand() { openssl rand -hex 32 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(32))'; }
+  cat > .env << ENVEOF
 APP_ENV=dev
 APP_TZ=Europe/Kyiv
-SECRET_KEY=skull-partners-secret-key-prod-0123456789abcdef
-SESSION_TTL_HOURS=24
+SECRET_KEY=$(rand)
+SESSION_TTL_HOURS=12
 DATABASE_URL=postgresql+psycopg://fbrent@localhost:5432/fbrent
 NEXT_PUBLIC_API_URL=
-CLOVER_SPEND_SECRET=dev-clover-secret-change-me
-BRIDGE_TOKEN=dev-bridge-token-change-me
+CLOVER_SPEND_SECRET=$(rand)
+BRIDGE_TOKEN=$(rand)
 FBM_API_URL=https://fbm-pay.com
-FBM_API_KEY=fbm_47DcRUwVJ4MZxMhSN7w9HZhCxEQf9hMtul9Z6C85dQvE6rbA
-FBM_PROXY=http://skullpartners:kbtVCtAZjs@95.135.50.46:50100
-GOOGLE_SHEETS_BUYERS_WEBHOOK_URL=https://script.google.com/macros/s/AKfycbw_MEkPB3eQOV-mJheXapWPGFygbFRxD4nZ2_euPg7eFXcqdLFbTwKyT7p2wsyYSMCd9w/exec
+# Заповнити локально. Не комітити ключ, проксі і webhook.
+FBM_API_KEY=
+FBM_PROXY=
 ENVEOF
 fi
 

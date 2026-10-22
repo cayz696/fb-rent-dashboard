@@ -231,13 +231,17 @@ export default function CardsPage() {
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right">
-                        <button
-                          onClick={() => setCodesFor(c)}
-                          className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-line-strong bg-surface-hover px-2 py-1 text-[11px] text-muted hover:text-main"
-                        >
-                          <KeyRound size={12} />
-                          3DS
-                        </button>
+                        {canWrite(user) ? (
+                          <button
+                            onClick={() => setCodesFor(c)}
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-line-strong bg-surface-hover px-2 py-1 text-[11px] text-muted hover:text-main"
+                          >
+                            <KeyRound size={12} />
+                            3DS
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-faint">лише оператор</span>
+                        )}
                       </td>
                     </tr>
                   ))}

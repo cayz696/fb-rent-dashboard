@@ -1,5 +1,5 @@
 "use client";
-import { Check, GitBranch, Laptop, Plus, RefreshCw, Shield } from "lucide-react";
+import { Check, GitBranch, Laptop, Plus, Shield } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
 import { Button, Card, CardHeader, Empty, ErrorNote, Field, Input, Modal, PageHeader, Select } from "@/components/ui";
@@ -203,83 +203,33 @@ function EditSectionsModal({ u, onClose, onDone }: { u: UserAdmin; onClose: () =
 }
 
 function DesktopGithubCard() {
-  const { data: st, mutate } = useSWR<SystemStatus>("/api/system/status", fetcher);
-  const [remoteUrl, setRemoteUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [error, setError] = useState("");
-
-  async function saveRemote() {
-    setBusy(true); setError(""); setMsg("");
-    try {
-      await api("/system/github-remote", { body: { remote_url: remoteUrl } });
-      setMsg("GitHub remote збережено");
-      setRemoteUrl("");
-      mutate();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function triggerUpdate() {
-    setBusy(true); setError(""); setMsg("");
-    try {
-      const res = await api<{ ok: boolean; commit?: string; git_output?: string }>("/system/github-update", { method: "POST" });
-      setMsg(res.git_output || `Оновлено до ${res.commit || "останньої версії"}`);
-      mutate();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { data: st } = useSWR<SystemStatus>("/api/system/status", fetcher);
 
   return (
     <Card>
       <CardHeader
-        title="Десктоп-додаток на ноутбук та оновлення через GitHub"
+        title="Версія на цій машині"
         right={
-          <div className="flex items-center gap-2">
-            {st?.commit && (
-              <span className="rounded bg-inset px-2 py-0.5 font-mono text-[11px] text-muted">
-                <GitBranch size={11} className="mr-1 inline" />
-                {st.branch || "main"} @ {st.commit}
-              </span>
-            )}
-            <Button size="sm" variant="primary" onClick={triggerUpdate} disabled={busy}>
-              <RefreshCw size={13} className={busy ? "animate-spin" : ""} />Оновити з GitHub
-            </Button>
-          </div>
+          st?.commit ? (
+            <span className="rounded bg-inset px-2 py-0.5 font-mono text-[11px] text-muted">
+              <GitBranch size={11} className="mr-1 inline" />
+              {st.branch || "main"} @ {st.commit}
+            </span>
+          ) : undefined
         }
       />
       <div className="space-y-3 p-5 text-[13px]">
         <div className="flex items-start gap-3 rounded-lg border border-line bg-inset/40 p-3.5">
           <Laptop size={18} className="mt-0.5 shrink-0 text-accent" />
           <div className="space-y-1">
-            <div className="font-medium">Нативний macOS додаток: <code className="font-mono text-accent">FB Rent.app</code></div>
+            <div className="font-medium">Оновлення коду не запускається з браузера</div>
             <p className="text-[12px] text-muted">
-              Запускає дашборд в окремому вікні ноутбука та підтримує роботу фонових задач (фіксація спенду кожні 3–4 год, звірка з FBM раз на добу, синхронізація таблиць команд).
+              На машині з дашбордом виконайте <code className="font-mono">desktop/update.sh</code>. Скрипт приймає лише remote на github.com, робить <code className="font-mono">git pull --ff-only</code> і міграції.
+              {st?.remote_url ? <> Зараз origin: <code className="font-mono">{st.remote_url}</code>.</> : " Remote origin ще не налаштований локально."}
             </p>
+            {st?.last_commit_msg && <div className="text-[11px] text-faint">Останній коміт: {st.last_commit_msg}</div>}
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-wider text-muted">Поточний GitHub Remote</div>
-            <div className="mt-1 font-mono text-[12px] text-main">{st?.remote_url || "не прив'язано (локальний репозиторій)"}</div>
-            {st?.last_commit_msg && <div className="mt-0.5 text-[11px] text-faint">Останній коміт: {st.last_commit_msg}</div>}
-          </div>
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted">Прив&apos;язати / змінити GitHub URL</div>
-              <Input placeholder="https://github.com/org/fb-rent-dashboard.git" value={remoteUrl} onChange={(e) => setRemoteUrl(e.target.value)} />
-            </div>
-            <Button onClick={saveRemote} disabled={busy || !remoteUrl.trim()}>Зберегти URL</Button>
-          </div>
-        </div>
-        {msg && <div className="rounded-md bg-success/10 px-3 py-2 font-mono text-[12px] text-success">{msg}</div>}
-        <ErrorNote>{error}</ErrorNote>
       </div>
     </Card>
   );

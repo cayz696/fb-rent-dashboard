@@ -115,7 +115,7 @@ def cards(db: Session = Depends(get_db), _: User = Depends(current_user)):
 
 
 @router.get("/cards/{card_id}/codes", response_model=list[CodeView])
-def card_codes(card_id: str, type: str = "otp", _: User = Depends(current_user)):
+def card_codes(card_id: str, type: str = "otp", _: User = Depends(can_write)):
     with _client() as f:
         try:
             codes = f.codes(card_id, type)

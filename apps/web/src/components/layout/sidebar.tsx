@@ -12,7 +12,6 @@ import {
   LogOut,
   MessageSquare,
   MonitorPlay,
-  RefreshCw,
   Settings,
   Sparkles,
   Upload,
@@ -22,7 +21,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
 import useSWR from "swr";
 import { NotificationsBell } from "@/components/layout/notifications";
 import { api, fetcher } from "@/lib/api";
@@ -33,12 +31,13 @@ import { cn } from "@/lib/utils";
 export function Sidebar({ user }: { user: User }) {
   const path = usePathname();
   const router = useRouter();
-  const { data: d } = useSWR<Dashboard>("/api/dashboard", fetcher, { refreshInterval: 30000 });
-  const { data: fbm } = useSWR<FbmCards>("/api/fbm/cards", fetcher, { refreshInterval: 60000 });
+  const canDash = hasSectionAccess(user, "dashboard");
+  const canCards = hasSectionAccess(user, "cards");
+  const canSettings = isAdmin(user) && hasSectionAccess(user, "settings");
+  const { data: d } = useSWR<Dashboard>(canDash ? "/api/dashboard" : null, fetcher, { refreshInterval: 30000 });
+  const { data: fbm } = useSWR<FbmCards>(canCards ? "/api/fbm/cards" : null, fetcher, { refreshInterval: 60000 });
   const { data: bridge } = useSWR<BridgeStatus>("/api/bridge/status", fetcher, { refreshInterval: 15000 });
-  const { data: sys, mutate: mutateSys } = useSWR<SystemStatus>("/api/system/status", fetcher, { refreshInterval: 120000 });
-  const [updatingGit, setUpdatingGit] = useState(false);
-  const [gitMsg, setGitMsg] = useState("");
+  const { data: sys } = useSWR<SystemStatus>(canSettings ? "/api/system/status" : null, fetcher, { refreshInterval: 120000 });
 
   const gateways: [string, string, string][] = [
     [
@@ -83,23 +82,6 @@ export function Sidebar({ user }: { user: User }) {
   async function logout() {
     await api("/auth/logout", { method: "POST" });
     router.replace("/login");
-  }
-
-  async function runGitUpdate() {
-    setUpdatingGit(true);
-    setGitMsg("");
-    try {
-      const res = await api<{ commit: string; git_output: string }>("/system/github-update", {
-        method: "POST",
-        body: {},
-      });
-      setGitMsg(`Оновлено (${res.commit})`);
-      mutateSys();
-    } catch (e) {
-      setGitMsg((e as Error).message);
-    } finally {
-      setUpdatingGit(false);
-    }
   }
 
   return (
@@ -162,23 +144,11 @@ export function Sidebar({ user }: { user: User }) {
               </span>
             </div>
           ))}
-          {isAdmin(user) && (
-            <div className="mt-2 border-t border-divider pt-2">
-              <div className="flex items-center justify-between text-[11px] text-faint">
-                <span className="flex items-center gap-1 font-mono">
-                  <GitBranch size={11} /> {sys?.commit || "local"}
-                </span>
-                <button
-                  onClick={runGitUpdate}
-                  disabled={updatingGit}
-                  title="Перевірити та підтягнути оновлення з GitHub"
-                  className="inline-flex cursor-pointer items-center gap-1 rounded border border-line-strong bg-surface-hover px-2 py-0.5 text-[11px] text-main hover:border-accent"
-                >
-                  <RefreshCw size={10} className={updatingGit ? "animate-spin" : ""} />
-                  Оновити з GitHub
-                </button>
-              </div>
-              {gitMsg && <div className="mt-1 truncate text-[10.5px] text-accent">{gitMsg}</div>}
+          {canSettings && (
+            <div className="mt-2 border-t border-divider pt-2 text-[11px] text-faint">
+              <span className="flex items-center gap-1 font-mono">
+                <GitBranch size={11} /> {sys?.commit || "local"}
+              </span>
             </div>
           )}
         </div>
