@@ -257,7 +257,7 @@ def sync_spends_from_fbm_payments(db: Session, days: int = 7) -> dict:
         by_b_dt: dict[tuple[uuid.UUID, date], Decimal] = {}
         page = 1
         stop = False
-        while not stop and page <= 50:
+        while not stop and page <= 80:
             res = f._raw("/api/client-api/payments", {"perPage": 100, "page": page})
             items = res.get("data") if isinstance(res, dict) else res
             if not items:
@@ -271,10 +271,18 @@ def sync_spends_from_fbm_payments(db: Session, days: int = 7) -> dict:
                 if dt < cutoff_date:
                     stop = True
                     break
-                amt = parse_money(it.get("accountAmount") or it.get("merchantAmount")) or Decimal("0")
+                # Беремо тільки успішні списання (Executed purchase).
+                # Відхилені (Declined), скасовані (Canceled) та повернення (Refund) не є спендом.
+                status = (it.get("status") or "").strip().lower()
+                op_type = (it.get("operation_type") or "").strip().lower()
+                if status != "executed" or op_type == "refund":
+                    continue
+                amt = parse_money(it.get("accountAmount")) or Decimal("0")
+                if amt <= Decimal("0"):
+                    continue
                 cid = str(it.get("cardId") or "")
                 card = cards_map.get(cid)
-                c_name = card.name if card else ""
+                c_name = (card.name if card else None) or it.get("cardName") or ""
                 b_name, _ = parse_card_identity(c_name, existing_map)
                 if b_name:
                     b_obj = buyers_by_low.get(b_name.lower())
@@ -282,6 +290,15 @@ def sync_spends_from_fbm_payments(db: Session, days: int = 7) -> dict:
                         key = (b_obj.id, dt)
                         by_b_dt[key] = by_b_dt.get(key, Decimal("0")) + amt
             page += 1
+
+    # Очищаємо помилкові записи (напр. від деклайнів або подвійних дельт) за цей період
+    existing_rows = db.scalars(
+        select(BuyerDailySpend).where(BuyerDailySpend.date >= cutoff_date)
+    ).all()
+    for row in existing_rows:
+        key = (row.buyer_id, row.date)
+        if key not in by_b_dt:
+            row.spend_fbm = Decimal("0")
 
     updated = 0
     for (b_id, dt), val in by_b_dt.items():
@@ -726,8 +743,13 @@ def push_team_spends_to_sheet(db: Session, team: Team, days: int = 31) -> dict:
         )
     ).all()
     by_b_dt: dict[tuple[uuid.UUID, date], Decimal] = {}
+    # За останні 7 днів пріоритет завжди у фактичного спенду FBM (навіть якщо він 0, щоб не залишати старі/помилкові суми)
+    recent_cutoff = today - timedelta(days=7)
     for r in rows_db:
-        val = r.spend_fbm if (r.spend_fbm and r.spend_fbm > Decimal("0")) else (r.spend_sheet or Decimal("0"))
+        if r.date >= recent_cutoff and r.spend_fbm is not None:
+            val = r.spend_fbm
+        else:
+            val = r.spend_fbm if (r.spend_fbm and r.spend_fbm > Decimal("0")) else (r.spend_sheet or Decimal("0"))
         by_b_dt[(r.buyer_id, r.date)] = val
 
     date_labels = [f"{d.day}/{d.month}" for d in dates]
