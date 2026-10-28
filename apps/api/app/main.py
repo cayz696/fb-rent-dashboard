@@ -8,10 +8,10 @@ from collections import defaultdict, deque
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import accounts, adspower, auth, bridge, buyers, catalog, clover, dashboard, fbm, finance, imports, notifications, reports, requests, system, users
+from app.api.routes import accounts, adspower, auth, bridge, buyers, catalog, clover, dashboard, fbm, finance, imports, notifications, reports, requests, system, tasks, users
 from app.core.db import SessionLocal
 from app.models import Team
-from app.services import buyers_sync
+from app.services import buyers_sync, telegram_tasks
 from sqlalchemy import select
 
 
@@ -45,16 +45,34 @@ async def _periodic_fbm_and_sheets_loop():
             pass
 
 
+async def _periodic_telegram_tasks_loop():
+    """Фоновий цикл: кожні 60 секунд перевіряє нові повідомлення в підключених Telegram-групах
+    та автоматично перетворює їх на задачі через ШІ-аналізатор контексту."""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            with SessionLocal() as db:
+                st = telegram_tasks.get_telegram_state(db)
+                if st.get("status") == "connected":
+                    await telegram_tasks.sync_messages_from_telegram(db, per_group_limit=20)
+        except Exception:
+            pass
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     task = None
+    tg_task = None
     if not os.environ.get("PYTEST_CURRENT_TEST"):
         task = asyncio.create_task(_periodic_fbm_and_sheets_loop())
+        tg_task = asyncio.create_task(_periodic_telegram_tasks_loop())
     try:
         yield
     finally:
         if task:
             task.cancel()
+        if tg_task:
+            tg_task.cancel()
 
 
 app = FastAPI(title="FB Rent API", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
@@ -100,6 +118,7 @@ for r in (
     fbm.router,
     buyers.router,
     reports.router,
+    tasks.router,
     system.router,
 ):
     app.include_router(r)

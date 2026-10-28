@@ -278,3 +278,95 @@ class Expense(Base):
 
     category: Mapped[ExpenseCategory] = relationship()
 
+
+task_code_seq = Sequence("task_code_seq")
+
+
+class TelegramGroup(Base):
+    """Telegram-група або супергрупа, підключена для моніторингу та парсингу задач."""
+    __tablename__ = "telegram_groups"
+    id: Mapped[uuid.UUID] = pk()
+    chat_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(256))
+    username: Mapped[Optional[str]] = mapped_column(String(128))
+    chat_type: Mapped[str] = mapped_column(String(32), default="supergroup")  # supergroup | group | channel | private
+    is_monitored: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    auto_create_tasks: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    team_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("teams.id"), index=True)
+    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("clients.id"), index=True)
+    default_assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    topic_filter: Mapped[Optional[str]] = mapped_column(Text)  # додатковий промпт/контекст для ШІ по цій групі
+    messages_parsed: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    tasks_created: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = ts()
+
+    team: Mapped[Optional[Team]] = relationship()
+    client: Mapped[Optional[Client]] = relationship()
+    default_assignee: Mapped[Optional[User]] = relationship()
+
+
+class TeamTask(Base):
+    """Задачник для команди: задачі, створені ШІ з Telegram-груп або вручну."""
+    __tablename__ = "team_tasks"
+    id: Mapped[uuid.UUID] = pk()
+    code: Mapped[str] = mapped_column(
+        String(20), unique=True,
+        server_default=text("'TSK-' || lpad(nextval('task_code_seq')::text, 4, '0')"),
+    )
+    title: Mapped[str] = mapped_column(String(256))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    raw_source_text: Mapped[Optional[str]] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="inbox", index=True)  # inbox | todo | in_progress | review | done | rejected
+    priority: Mapped[str] = mapped_column(String(32), default="medium", index=True)  # low | medium | high | urgent
+    category: Mapped[str] = mapped_column(String(48), default="general", index=True)  # issue_accounts | card_issue | bm_share | account_check | procurement | finance | general
+    source: Mapped[str] = mapped_column(String(32), default="manual")  # telegram | ai_agent | manual
+    telegram_group_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("telegram_groups.id"), index=True)
+    telegram_chat_title: Mapped[Optional[str]] = mapped_column(String(256))
+    telegram_sender: Mapped[Optional[str]] = mapped_column(String(128))
+    telegram_message_link: Mapped[Optional[str]] = mapped_column(Text)
+    assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"), index=True)
+    creator_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    team_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("teams.id"), index=True)
+    buyer_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("buyers.id"), index=True)
+    client_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("clients.id"), index=True)
+    linked_request_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("requests.id"))
+    checklist: Mapped[List[Any]] = mapped_column(JSONB, default=list)
+    ai_context: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
+    comments: Mapped[List[Any]] = mapped_column(JSONB, default=list)
+    due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    telegram_group: Mapped[Optional[TelegramGroup]] = relationship()
+    assignee: Mapped[Optional[User]] = relationship(foreign_keys=[assignee_id])
+    creator: Mapped[Optional[User]] = relationship(foreign_keys=[creator_id])
+    team: Mapped[Optional[Team]] = relationship()
+    buyer: Mapped[Optional[Buyer]] = relationship()
+    client: Mapped[Optional[Client]] = relationship()
+
+
+class TelegramMessageLog(Base):
+    """Потік повідомлень із підключених Telegram-груп з результатом ШІ-аналізу."""
+    __tablename__ = "telegram_message_logs"
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    group_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("telegram_groups.id"), index=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    chat_title: Mapped[Optional[str]] = mapped_column(String(256))
+    message_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    reply_to_msg_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+    sender_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+    sender_username: Mapped[Optional[str]] = mapped_column(String(128))
+    sender_name: Mapped[Optional[str]] = mapped_column(String(128))
+    raw_text: Mapped[str] = mapped_column(Text)
+    message_link: Mapped[Optional[str]] = mapped_column(Text)
+    is_actionable: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    ai_intent: Mapped[Optional[str]] = mapped_column(String(64))
+    ai_confidence: Mapped[Optional[int]] = mapped_column(Integer)
+    ai_extracted: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
+    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("team_tasks.id"), index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at: Mapped[datetime] = ts()
+
+

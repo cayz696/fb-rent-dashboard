@@ -151,3 +151,82 @@ export interface SystemStatus {
   auto_sync_interval_hours: number; reconcile_interval_hours: number;
   last_spend_snapshot: string | null;
 }
+
+export type TaskStatus = "inbox" | "todo" | "in_progress" | "review" | "done" | "rejected";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskCategory = "issue_accounts" | "card_issue" | "bm_share" | "account_check" | "procurement" | "finance" | "general";
+
+export interface TaskChecklistItem { id: string; text: string; done: boolean }
+export interface TaskCommentItem { id: string; author: string; text: string; created_at: string }
+
+export interface TeamTaskItem {
+  id: string; code: string; title: string; description: string | null; raw_source_text: string | null;
+  status: TaskStatus; priority: TaskPriority; category: TaskCategory; source: string;
+  telegram_group_id: string | null; telegram_chat_title: string | null;
+  telegram_sender: string | null; telegram_message_link: string | null;
+  assignee_id: string | null; assignee_name: string | null;
+  creator_id: string | null; creator_name: string | null;
+  team_id: string | null; team_name: string | null;
+  buyer_id: string | null; buyer_name: string | null;
+  client_id: string | null; client_name: string | null;
+  linked_request_id: string | null;
+  checklist: TaskChecklistItem[]; checklist_done: number; checklist_total: number;
+  ai_context: {
+    confidence?: number; engine?: string; reasoning?: string; suggested_reply?: string | null;
+    account_codes?: string[]; card_last4?: string[]; bm_id?: string | null;
+    qty?: number | null; geo?: string | null; limit?: string | null; context_used?: number;
+  };
+  comments: TaskCommentItem[];
+  due_at: string | null; completed_at: string | null; created_at: string; updated_at: string;
+}
+
+export interface TelegramGroupItem {
+  id: string; chat_id: number; title: string; username: string | null; chat_type: string;
+  is_monitored: boolean; auto_create_tasks: boolean;
+  team_id: string | null; team_name: string | null;
+  client_id: string | null; client_name: string | null;
+  default_assignee_id: string | null; default_assignee_name: string | null;
+  topic_filter: string | null; messages_parsed: number; tasks_created: number;
+  last_message_at: string | null; created_at: string;
+}
+
+export interface TelegramMessageLogItem {
+  id: number; group_id: string | null; chat_id: number; chat_title: string | null;
+  message_id: number; reply_to_msg_id: number | null;
+  sender_username: string | null; sender_name: string | null;
+  raw_text: string; message_link: string | null;
+  is_actionable: boolean; ai_intent: string | null; ai_confidence: number | null;
+  ai_extracted: Record<string, unknown>;
+  task_id: string | null; task_code: string | null; task_status: string | null;
+  sent_at: string;
+}
+
+export interface TelegramAccountState {
+  status: "disconnected" | "code_sent" | "connected" | "error";
+  phone: string; api_id: string | number; api_hash_masked: string; has_credentials: boolean;
+  account_name: string | null; account_username: string | null; account_id: number | null;
+  last_sync_at: string | null; error: string | null; auto_poll_seconds: number;
+}
+
+export interface TasksAiConfig {
+  provider: string; model: string; api_key_masked: string; has_api_key: boolean;
+  confidence_threshold: number; ignore_short_noise: boolean;
+  auto_assign_by_category: boolean; system_prompt: string;
+}
+
+export interface TasksOverview {
+  stats: {
+    total: number; inbox: number; todo: number; in_progress: number;
+    review: number; done: number; rejected: number; urgent: number;
+    from_telegram: number; messages_total: number; noise_filtered: number;
+  };
+  tasks: TeamTaskItem[];
+  groups: TelegramGroupItem[];
+  recent_messages: TelegramMessageLogItem[];
+  telegram_state: TelegramAccountState;
+  ai_config: TasksAiConfig;
+  users: { id: string; name: string; username: string; role: string }[];
+  teams: { id: string; name: string }[];
+  buyers: { id: string; name: string; team_id: string | null }[];
+  clients: { id: string; name: string }[];
+}

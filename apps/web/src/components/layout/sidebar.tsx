@@ -4,6 +4,7 @@ import {
   BarChart3,
   BookText,
   Building2,
+  CheckSquare,
   CircleDollarSign,
   Columns3,
   CreditCard,
@@ -27,7 +28,7 @@ import useSWR from "swr";
 import { NotificationsBell } from "@/components/layout/notifications";
 import { api, fetcher } from "@/lib/api";
 import { hasSectionAccess, isAdmin } from "@/lib/session";
-import type { BridgeStatus, Dashboard, FbmCards, SystemStatus, User } from "@/lib/types";
+import type { BridgeStatus, Dashboard, FbmCards, SystemStatus, TasksOverview, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function Sidebar({ user }: { user: User }) {
@@ -36,6 +37,7 @@ export function Sidebar({ user }: { user: User }) {
   const { data: d } = useSWR<Dashboard>("/api/dashboard", fetcher, { refreshInterval: 30000 });
   const { data: fbm } = useSWR<FbmCards>("/api/fbm/cards", fetcher, { refreshInterval: 60000 });
   const { data: bridge } = useSWR<BridgeStatus>("/api/bridge/status", fetcher, { refreshInterval: 15000 });
+  const { data: tasksOv } = useSWR<TasksOverview>("/api/tasks/overview", fetcher, { refreshInterval: 30000 });
   const { data: sys, mutate: mutateSys } = useSWR<SystemStatus>("/api/system/status", fetcher, { refreshInterval: 120000 });
   const [updatingGit, setUpdatingGit] = useState(false);
   const [gitMsg, setGitMsg] = useState("");
@@ -47,6 +49,13 @@ export function Sidebar({ user }: { user: User }) {
       !fbm?.configured ? "var(--text-faint)" : fbm.total > 0 ? "var(--success)" : "var(--warning)",
     ],
     [
+      "Telegram + ШІ",
+      tasksOv?.telegram_state?.status === "connected"
+        ? "ТГ підключено"
+        : `${tasksOv?.groups?.filter((g) => g.is_monitored).length ?? 3} груп (ШІ)`,
+      tasksOv?.telegram_state?.status === "connected" ? "var(--success)" : "var(--accent)",
+    ],
+    [
       "AdsPower Bridge",
       !bridge?.last_seen ? "не підключено" : bridge.online ? "онлайн" : "офлайн",
       !bridge?.last_seen ? "var(--text-faint)" : bridge.online ? "var(--success)" : "var(--danger)",
@@ -54,8 +63,11 @@ export function Sidebar({ user }: { user: User }) {
     ["Автофіксація (3–4г)", "активна", "var(--success)"],
   ];
 
+  const openTasksCount = tasksOv ? tasksOv.stats.inbox + tasksOv.stats.todo + tasksOv.stats.in_progress : undefined;
+
   const allItems = [
     { key: "dashboard", href: "/dashboard", label: "Дашборд", icon: LayoutGrid },
+    { key: "tasks", href: "/tasks", label: "Задачник (ТГ + ШІ)", icon: CheckSquare, badge: openTasksCount || undefined },
     { key: "buyers", href: "/buyers", label: "Юзери та Команди", icon: UserCheck },
     { key: "cards", href: "/cards", label: "Картки FBM", icon: CreditCard, count: fbm?.total || undefined },
     {

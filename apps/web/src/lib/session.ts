@@ -5,6 +5,7 @@ import type { User } from "./types";
 
 export const ALL_SECTIONS = [
   { key: "dashboard", label: "Дашборд", href: "/dashboard" },
+  { key: "tasks", label: "Задачник (ТГ + ШІ)", href: "/tasks" },
   { key: "buyers", label: "Юзери та Команди", href: "/buyers" },
   { key: "cards", label: "Картки FBM", href: "/cards" },
   { key: "accounts", label: "Акаунти", href: "/accounts" },
