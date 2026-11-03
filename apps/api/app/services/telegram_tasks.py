@@ -456,11 +456,19 @@ def convert_task_to_account_request(db: Session, task: TeamTask, actor: str) -> 
 # ─────────────────────────────────────────────────────────────────────────────
 
 def ensure_initial_structure(db: Session) -> None:
-    """Якщо таблиця груп порожня — створює стартові робочі групи, прив'язані до реальних команд,
-    та пропускає стартову вибірку реальних арбітражних повідомлень через ШІ-парсер."""
+    """Якщо таблиця груп порожня (і демо ще не ініціалізувалося раніше) — створює стартові робочі групи."""
+    seeded_flag = db.get(SystemState, "tasks_demo_seeded")
+    tg_state = db.get(SystemState, TG_STATE_KEY)
+    if seeded_flag or (tg_state and tg_state.value and tg_state.value.get("status") == "connected"):
+        return
+
     existing_groups = db.scalar(select(func.count()).select_from(TelegramGroup)) or 0
     if existing_groups > 0:
+        db.add(SystemState(key="tasks_demo_seeded", value={"seeded": True}))
+        db.commit()
         return
+
+    db.add(SystemState(key="tasks_demo_seeded", value={"seeded": True}))
 
     teams = db.scalars(select(Team).order_by(Team.name)).all()
     team_298 = next((t for t in teams if "298" in t.name), teams[0] if teams else None)

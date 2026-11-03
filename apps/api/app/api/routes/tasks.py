@@ -537,17 +537,39 @@ def patch_telegram_group(group_id: uuid.UUID, body: TelegramGroupPatchIn, db: Se
 
 
 @router.delete("/groups/{group_id}")
-def delete_telegram_group(group_id: uuid.UUID, db: Session = Depends(get_db), _: User = Depends(can_write)):
+def delete_telegram_group(
+    group_id: uuid.UUID,
+    delete_tasks: bool = Query(default=True),
+    db: Session = Depends(get_db),
+    _: User = Depends(can_write),
+):
     g = db.get(TelegramGroup, group_id)
     if not g:
         raise HTTPException(404, "Групу не знайдено")
-    for l in db.scalars(select(TelegramMessageLog).where(TelegramMessageLog.group_id == g.id)).all():
-        l.group_id = None
-    for t in db.scalars(select(TeamTask).where(TeamTask.telegram_group_id == g.id)).all():
-        t.telegram_group_id = None
+
+    logs = db.scalars(
+        select(TelegramMessageLog).where(
+            or_(TelegramMessageLog.group_id == g.id, TelegramMessageLog.chat_id == g.chat_id)
+        )
+    ).all()
+    tasks = db.scalars(select(TeamTask).where(TeamTask.telegram_group_id == g.id)).all()
+
+    if delete_tasks:
+        for l in logs:
+            db.delete(l)
+        db.flush()
+        for t in tasks:
+            db.delete(t)
+        db.flush()
+    else:
+        for l in logs:
+            l.group_id = None
+        for t in tasks:
+            t.telegram_group_id = None
+
     db.delete(g)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "deleted_tasks": len(tasks) if delete_tasks else 0, "deleted_logs": len(logs) if delete_tasks else 0}
 
 
 @router.post("/simulate-message")

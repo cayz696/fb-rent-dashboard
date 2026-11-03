@@ -352,6 +352,14 @@ export default function TasksPage() {
     mutate();
   }
 
+  async function handleDeleteGroup(g: TelegramGroupItem) {
+    await api(`/tasks/groups/${g.id}?delete_tasks=true`, { method: "DELETE" });
+    setDiscoveredDialogs((prev) =>
+      prev.map((x) => (x.chat_id === g.chat_id ? { ...x, already_added: false } : x)),
+    );
+    mutate();
+  }
+
   async function saveAiSettings() {
     if (!data) return;
     setAiSavedMsg("");
@@ -1200,7 +1208,21 @@ export default function TasksPage() {
                               <span className="ml-2 font-mono text-[11px] text-faint">{d.chat_id}</span>
                             </div>
                             {d.already_added ? (
-                              <span className="shrink-0 text-[11px] text-emerald-400">✓ Додано</span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span className="text-[11px] text-emerald-400">✓ Додано</span>
+                                {(() => {
+                                  const matchedGroup = data?.groups.find((gr) => gr.chat_id === d.chat_id);
+                                  return matchedGroup ? (
+                                    <button
+                                      onClick={() => handleDeleteGroup(matchedGroup)}
+                                      title="Видалити групу та її задачі"
+                                      className="cursor-pointer rounded border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-rose-300 hover:bg-rose-500/25"
+                                    >
+                                      × Прибрати
+                                    </button>
+                                  ) : null;
+                                })()}
+                              </div>
                             ) : (
                               <Button
                                 size="sm"
@@ -1457,6 +1479,17 @@ export default function TasksPage() {
                           >
                             {g.auto_create_tasks ? "Авто-задачі: УВІМК" : "Тільки лог"}
                           </button>
+
+                          {editable && (
+                            <button
+                              onClick={() => handleDeleteGroup(g)}
+                              title="Видалити групу з моніторингу разом зі створеними з неї задачами"
+                              className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 text-[11.5px] font-semibold text-rose-300 transition hover:bg-rose-500/25"
+                            >
+                              <Trash2 size={13} />
+                              Видалити
+                            </button>
+                          )}
                         </div>
                       </div>
 
