@@ -2,7 +2,7 @@
 # Launcher script for FB Rent Desktop App (macOS)
 set -e
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+export PATH="/opt/homebrew/bin:/opt/homebrew/opt/postgresql@16/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -20,20 +20,29 @@ mkdir -p "$LOG_DIR"
 
 cd "$ROOT_DIR"
 
-# 1. Ensure Postgres DB container is running on :5440
-if ! nc -z 127.0.0.1 5440 >/dev/null 2>&1; then
-  if command -v docker >/dev/null 2>&1; then
+# 1. Ensure Postgres DB is running (local Homebrew :5432 or Docker :5440)
+if ! nc -z 127.0.0.1 5432 >/dev/null 2>&1 && ! nc -z 127.0.0.1 5440 >/dev/null 2>&1; then
+  if command -v brew >/dev/null 2>&1; then
+    brew services start postgresql@16 >>"$LOG_DIR/db.log" 2>&1 || brew services start postgresql >>"$LOG_DIR/db.log" 2>&1 || true
+    sleep 2
+  fi
+  if ! nc -z 127.0.0.1 5432 >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
     docker compose up -d db >>"$LOG_DIR/db.log" 2>&1 || true
     sleep 2
   fi
 fi
 
-# 2. Ensure FastAPI backend is running on :8010 (with background 3-4h spend sync & 24h FBM reconciliation)
-if ! nc -z 127.0.0.1 8010 >/dev/null 2>&1; then
-  cd "$ROOT_DIR/apps/api"
-  nohup ./.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010 >>"$LOG_DIR/api.log" 2>&1 &
-  cd "$ROOT_DIR"
+# 2. Ensure Python dependencies & DB migrations are up to date, then start FastAPI backend on :8010
+cd "$ROOT_DIR/apps/api"
+if [ -x "./.venv/bin/pip" ]; then
+  ./.venv/bin/pip install -q -r requirements.txt >>"$LOG_DIR/api.log" 2>&1 || true
+  ./.venv/bin/alembic upgrade head >>"$LOG_DIR/api.log" 2>&1 || true
 fi
+
+if ! nc -z 127.0.0.1 8010 >/dev/null 2>&1; then
+  nohup ./.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010 >>"$LOG_DIR/api.log" 2>&1 &
+fi
+cd "$ROOT_DIR"
 
 # 3. Ensure Next.js frontend is running on :3010
 if ! nc -z 127.0.0.1 3010 >/dev/null 2>&1; then
@@ -42,16 +51,16 @@ if ! nc -z 127.0.0.1 3010 >/dev/null 2>&1; then
   cd "$ROOT_DIR"
 fi
 
-# Wait up to 8 seconds for web server to respond
-for i in {1..16}; do
+# Wait up to 10 seconds for web server to respond
+for i in {1..20}; do
   if nc -z 127.0.0.1 3010 >/dev/null 2>&1; then
     break
   fi
   sleep 0.5
 done
 
-# 4. Open dedicated standalone Desktop App window (Chromeless App Mode if Chrome/Brave/Edge available, otherwise default browser)
-APP_URL="http://localhost:3010/buyers"
+# 4. Open dedicated standalone Desktop App window
+APP_URL="http://localhost:3010/dashboard"
 
 if [ -d "/Applications/Google Chrome.app" ]; then
   open -na "Google Chrome" --args "--app=$APP_URL"

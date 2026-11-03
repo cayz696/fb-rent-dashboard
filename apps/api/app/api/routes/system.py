@@ -126,7 +126,17 @@ def github_update(_: User = Depends(admin_only)):
     if rc_pull != 0:
         raise HTTPException(400, f"Не вдалося оновити з GitHub: {out_pull}")
 
-    # Автоматично проганяємо міграції БД після git pull
+    # Автоматично оновлюємо залежності та проганяємо міграції БД після git pull
+    pip_bin = ROOT_DIR / "apps" / "api" / ".venv" / "bin" / "pip"
+    if pip_bin.exists():
+        subprocess.run(
+            [str(pip_bin), "install", "-q", "-r", "requirements.txt"],
+            cwd=str(ROOT_DIR / "apps" / "api"),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
     alembic_bin = ROOT_DIR / "apps" / "api" / ".venv" / "bin" / "alembic"
     mig_out = ""
     if alembic_bin.exists():
