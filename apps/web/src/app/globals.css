@@ -30,8 +30,10 @@
   --radius-xl: 18px;
 }
 
-html, body { background: var(--bg); color: var(--text-main); }
+html, body { background: var(--bg); color: var(--text-main); --app-zoom: 1; }
 body { font-family: var(--font-inter), sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }
+.app-shell-height { min-height: calc(100vh / var(--app-zoom, 1)); }
+.sidebar-full-height { height: calc(100vh / var(--app-zoom, 1)); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 ::selection { background: var(--accent-glow); }
 * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }

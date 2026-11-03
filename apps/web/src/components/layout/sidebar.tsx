@@ -12,8 +12,10 @@ import {
   LayoutGrid,
   LogOut,
   MessageSquare,
+  Minus,
   MonitorPlay,
   Moon,
+  Plus,
   RefreshCw,
   Settings,
   Sparkles,
@@ -25,7 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
 import { NotificationsBell } from "@/components/layout/notifications";
 import { api, fetcher } from "@/lib/api";
@@ -43,6 +45,26 @@ export function Sidebar({ user }: { user: User }) {
   const { data: sys, mutate: mutateSys } = useSWR<SystemStatus>("/api/system/status", fetcher, { refreshInterval: 120000 });
   const [updatingGit, setUpdatingGit] = useState(false);
   const [gitMsg, setGitMsg] = useState("");
+  const [zoomPercent, setZoomPercent] = useState(100);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = localStorage.getItem("sp_ui_zoom");
+    const parsed = raw ? parseInt(raw, 10) : 100;
+    if (Number.isFinite(parsed)) {
+      setZoomPercent(Math.min(125, Math.max(75, parsed)));
+    }
+  }, []);
+
+  function applyZoom(next: number) {
+    const clamped = Math.min(125, Math.max(75, next));
+    setZoomPercent(clamped);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("sp_ui_zoom", String(clamped));
+      document.documentElement.style.setProperty("--app-zoom", String(clamped / 100));
+      (document.documentElement.style as unknown as Record<string, string>).zoom = `${clamped}%`;
+    }
+  }
 
   const gateways: [string, string, string][] = [
     [
@@ -135,7 +157,7 @@ export function Sidebar({ user }: { user: User }) {
   }
 
   return (
-    <aside className="sticky top-0 flex h-screen w-[280px] shrink-0 flex-col gap-4 border-r border-line bg-surface px-4 py-5 overflow-visible">
+    <aside className="sidebar-full-height sticky top-0 flex w-[280px] shrink-0 flex-col gap-4 border-r border-line bg-surface px-4 py-5 overflow-visible">
       <div className="flex items-center gap-3 px-2">
         <div className="relative size-11 overflow-hidden rounded-xl border border-purple-500/40 shadow-[0_0_16px_rgba(168,85,247,0.35)] shrink-0 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -215,6 +237,56 @@ export function Sidebar({ user }: { user: User }) {
           )}
         </div>
 
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-line bg-inset px-2.5 py-1.5 text-[11.5px]">
+          <div className="flex items-center gap-1">
+            <span className="text-[10.5px] font-medium text-faint mr-1">Масштаб:</span>
+            <button
+              onClick={() => applyZoom(zoomPercent - 5)}
+              disabled={zoomPercent <= 75}
+              title="Зменшити масштаб (-5%)"
+              aria-label="Зменшити масштаб"
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded border border-line bg-surface hover:border-accent hover:text-main disabled:opacity-40 text-muted transition"
+            >
+              <Minus size={12} />
+            </button>
+            <button
+              onClick={() => applyZoom(100)}
+              title="Скинути масштаб до 100%"
+              className="min-w-[44px] cursor-pointer rounded px-1 py-0.5 text-center font-mono text-[11px] font-semibold text-main hover:bg-surface-hover transition"
+            >
+              {zoomPercent}%
+            </button>
+            <button
+              onClick={() => applyZoom(zoomPercent + 5)}
+              disabled={zoomPercent >= 125}
+              title="Збільшити масштаб (+5%)"
+              aria-label="Збільшити масштаб"
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded border border-line bg-surface hover:border-accent hover:text-main disabled:opacity-40 text-muted transition"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+
+          <button
+            onClick={toggleTheme}
+            title={currentTheme === "light" ? "Увімкнути темну тему" : "Увімкнути світлу тему"}
+            aria-label="Змінити тему оформлення"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded border border-line bg-surface px-2 py-1 text-[11px] font-medium text-muted transition hover:border-accent hover:text-main"
+          >
+            {currentTheme === "light" ? (
+              <>
+                <Moon size={13} className="text-accent" />
+                <span>Темна</span>
+              </>
+            ) : (
+              <>
+                <Sun size={13} className="text-accent" />
+                <span>Світла</span>
+              </>
+            )}
+          </button>
+        </div>
+
         <div className="flex items-center justify-between rounded-lg px-2 text-[13px]">
           <div className="min-w-0">
             <div className="truncate font-medium">{user.name}</div>
@@ -224,24 +296,6 @@ export function Sidebar({ user }: { user: User }) {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={toggleTheme}
-              title={currentTheme === "light" ? "Увімкнути темну тему" : "Увімкнути світлу тему"}
-              aria-label="Змінити тему оформлення"
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-surface-hover px-2 py-1.5 text-[11.5px] font-medium text-muted transition hover:border-accent hover:text-main"
-            >
-              {currentTheme === "light" ? (
-                <>
-                  <Moon size={14} className="text-accent" />
-                  <span>Темна</span>
-                </>
-              ) : (
-                <>
-                  <Sun size={14} className="text-accent" />
-                  <span>Світла</span>
-                </>
-              )}
-            </button>
             <NotificationsBell />
             <button
               onClick={logout}
