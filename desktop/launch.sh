@@ -20,14 +20,21 @@ mkdir -p "$LOG_DIR"
 
 cd "$ROOT_DIR"
 
-# 1. Ensure Postgres DB is running (local Homebrew :5432 or Docker :5440)
+# 1. Ensure Postgres DB is running (Docker :5440 or local Homebrew :5432)
 if ! nc -z 127.0.0.1 5432 >/dev/null 2>&1 && ! nc -z 127.0.0.1 5440 >/dev/null 2>&1; then
-  if command -v brew >/dev/null 2>&1; then
-    brew services start postgresql@16 >>"$LOG_DIR/db.log" 2>&1 || brew services start postgresql >>"$LOG_DIR/db.log" 2>&1 || true
+  if grep -q ":5440" .env 2>/dev/null && command -v docker >/dev/null 2>&1; then
+    if ! docker info >/dev/null 2>&1; then
+      open -a Docker || true
+      for i in {1..20}; do
+        docker info >/dev/null 2>&1 && break
+        sleep 2
+      done
+    fi
+    docker compose up -d db >>"$LOG_DIR/db.log" 2>&1 || true
     sleep 2
   fi
-  if ! nc -z 127.0.0.1 5432 >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
-    docker compose up -d db >>"$LOG_DIR/db.log" 2>&1 || true
+  if ! nc -z 127.0.0.1 5440 >/dev/null 2>&1 && command -v brew >/dev/null 2>&1; then
+    brew services start postgresql@16 >>"$LOG_DIR/db.log" 2>&1 || true
     sleep 2
   fi
 fi
