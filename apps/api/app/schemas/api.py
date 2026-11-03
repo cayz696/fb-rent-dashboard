@@ -39,6 +39,7 @@ class UserOut(ORM):
     name: str
     role: Role
     allowed_sections: list[str] | None = None
+    theme: str = "dark"
 
 
 # ---- suppliers / batches / clients

@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -73,4 +74,19 @@ def logout(response: Response):
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(current_user)):
+    return user
+
+
+class ThemeIn(BaseModel):
+    theme: str
+
+
+@router.patch("/me/theme", response_model=UserOut)
+def update_my_theme(body: ThemeIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    t = body.theme.strip().lower()
+    if t not in ("dark", "light"):
+        raise HTTPException(400, "Тема має бути 'dark' або 'light'")
+    user.theme = t
+    db.commit()
+    db.refresh(user)
     return user

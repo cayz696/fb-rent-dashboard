@@ -13,9 +13,11 @@ import {
   LogOut,
   MessageSquare,
   MonitorPlay,
+  Moon,
   RefreshCw,
   Settings,
   Sparkles,
+  Sun,
   Upload,
   UserCheck,
   Users,
@@ -24,7 +26,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 import { NotificationsBell } from "@/components/layout/notifications";
 import { api, fetcher } from "@/lib/api";
 import { hasSectionAccess, isAdmin } from "@/lib/session";
@@ -91,6 +93,24 @@ export function Sidebar({ user }: { user: User }) {
   ];
 
   const items = allItems.filter((item) => hasSectionAccess(user, item.key));
+  const currentTheme = user.theme === "light" ? "light" : "dark";
+
+  async function toggleTheme() {
+    const nextTheme = currentTheme === "light" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", nextTheme);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("sp_theme", nextTheme);
+    }
+    try {
+      const updated = await api<User>("/me/theme", {
+        method: "PATCH",
+        body: { theme: nextTheme },
+      });
+      globalMutate("/api/me", updated, false);
+    } catch {
+      globalMutate("/api/me");
+    }
+  }
 
   async function logout() {
     await api("/auth/logout", { method: "POST" });
@@ -204,6 +224,24 @@ export function Sidebar({ user }: { user: User }) {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={toggleTheme}
+              title={currentTheme === "light" ? "Увімкнути темну тему" : "Увімкнути світлу тему"}
+              aria-label="Змінити тему оформлення"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-surface-hover px-2 py-1.5 text-[11.5px] font-medium text-muted transition hover:border-accent hover:text-main"
+            >
+              {currentTheme === "light" ? (
+                <>
+                  <Moon size={14} className="text-accent" />
+                  <span>Темна</span>
+                </>
+              ) : (
+                <>
+                  <Sun size={14} className="text-accent" />
+                  <span>Світла</span>
+                </>
+              )}
+            </button>
             <NotificationsBell />
             <button
               onClick={logout}

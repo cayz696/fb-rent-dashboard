@@ -37,6 +37,7 @@ class User(Base):
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     allowed_sections: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String), nullable=True)
+    theme: Mapped[str] = mapped_column(String(16), default="dark", server_default=text("'dark'"))
     created_at: Mapped[datetime] = ts()
 
 

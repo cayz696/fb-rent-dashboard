@@ -4,7 +4,7 @@ export type Stage =
 export type OffReason = "ban" | "reserve" | "paused" | "returned" | "written_off";
 export type Role = "admin" | "operator" | "viewer";
 
-export interface User { id: string; username: string; name: string; role: Role; allowed_sections?: string[] | null }
+export interface User { id: string; username: string; name: string; role: Role; allowed_sections?: string[] | null; theme?: "dark" | "light" }
 
 export interface Account {
   id: string; code: string; stage: Stage; off_reason: OffReason | null;

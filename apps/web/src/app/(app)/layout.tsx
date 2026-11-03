@@ -8,6 +8,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, unauthorized } = useMe();
   const router = useRouter();
   useEffect(() => { if (unauthorized) router.replace("/login"); }, [unauthorized, router]);
+  useEffect(() => {
+    const saved = user?.theme || (typeof window !== "undefined" ? localStorage.getItem("sp_theme") : null) || "dark";
+    const resolved = saved === "light" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", resolved);
+    if (user?.theme) {
+      localStorage.setItem("sp_theme", resolved);
+    }
+  }, [user?.theme]);
 
   if (!user) return <div className="grid min-h-screen place-items-center text-[13px] text-muted">Завантаження…</div>;
   return (

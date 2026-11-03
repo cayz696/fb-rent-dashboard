@@ -38,3 +38,11 @@ body { font-family: var(--font-inter), sans-serif; font-size: 14px; -webkit-font
 
 .panel { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); }
 .kpi-glow { background-image: var(--glow-kpi); }
+
+/* Підвищення контрастності акцентних бейджів у світлій темі */
+html[data-theme="light"] .text-purple-300 { color: #6b21a8; }
+html[data-theme="light"] .text-sky-300 { color: #0369a1; }
+html[data-theme="light"] .text-emerald-300 { color: #047857; }
+html[data-theme="light"] .text-amber-300 { color: #b45309; }
+html[data-theme="light"] .text-rose-300 { color: #be123c; }
+html[data-theme="light"] select option { background: #ffffff; color: #0f172a; }

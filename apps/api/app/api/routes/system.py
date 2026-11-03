@@ -31,6 +31,17 @@ def _run_git(args: list[str], timeout: int = 20) -> tuple[int, str]:
         return 1, str(e)
 
 
+def _get_current_branch() -> str:
+    """Сумісний з усіма версіями Git спосіб отримання поточної гілки."""
+    c, out = _run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+    if c == 0 and out and out != "HEAD" and "\n" not in out and not out.startswith("error:"):
+        return out.strip()
+    c2, out2 = _run_git(["symbolic-ref", "--short", "HEAD"])
+    if c2 == 0 and out2 and "\n" not in out2 and not out2.startswith("error:"):
+        return out2.strip()
+    return "main"
+
+
 class RemoteIn(BaseModel):
     remote_url: str
 
@@ -54,9 +65,7 @@ def system_status(
         c1, out1 = _run_git(["rev-parse", "--short", "HEAD"])
         if c1 == 0 and out1:
             commit = out1
-        c2, out2 = _run_git(["branch", "--show-current"])
-        if c2 == 0 and out2:
-            branch = out2
+        branch = _get_current_branch()
         c3, out3 = _run_git(["remote", "get-url", "origin"])
         if c3 == 0 and out3:
             remote_url = out3
@@ -111,8 +120,7 @@ def github_update(_: User = Depends(admin_only)):
     if c_rem != 0 or not rem_url:
         raise HTTPException(400, "Спочатку вкажіть GitHub Remote URL у налаштуваннях")
 
-    _, branch = _run_git(["branch", "--show-current"])
-    branch = branch or "main"
+    branch = _get_current_branch()
 
     rc_pull, out_pull = _run_git(["pull", "--ff-only", "origin", branch], timeout=45)
     if rc_pull != 0:
