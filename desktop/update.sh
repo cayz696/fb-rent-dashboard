@@ -66,21 +66,29 @@ if ! nc -z 127.0.0.1 5440 >/dev/null 2>&1 && ! nc -z 127.0.0.1 5432 >/dev/null 2
   fi
 fi
 
-echo "==> [3/5] Оновлення Python-залежностей та міграцій БД..."
+echo "==> [3/5] Оновлення Python-залежностей, міграцій та синхронізація локальної БД..."
 cd "$ROOT_DIR/apps/api"
 ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/alembic upgrade head
-./.venv/bin/python3 -c "
-from sqlalchemy import select
+if [ -f "$ROOT_DIR/desktop/db_snapshot.json.gz" ]; then
+  ./.venv/bin/python3 -c "
+from sqlalchemy import func, select
 from app.core.db import SessionLocal
-from app.core.security import hash_password
-from app.models import Role, User
+from app.models import Team, Account
+from app.services.db_sync import import_snapshot
+import os
+
 with SessionLocal() as db:
-    if not db.scalar(select(User)):
-        db.add(User(username='admin', name='Олександр', role=Role.admin, password_hash=hash_password('admin123')))
-        db.commit()
-        print('Створено базового адміна: admin / admin123')
-" || true
+    teams_cnt = db.scalar(select(func.count()).select_from(Team)) or 0
+    accs_cnt = db.scalar(select(func.count()).select_from(Account)) or 0
+
+if os.environ.get('FORCE_DB_SYNC') == '1' or teams_cnt < 5 or accs_cnt < 100:
+    res = import_snapshot()
+    print('✅ Перенесено повну локальну БД з основного ноутбука:', res)
+else:
+    print(f'ℹ️ Локальна БД вже заповнена (команд: {teams_cnt}, акаунтів: {accs_cnt}). Для примусового перезапису: FORCE_DB_SYNC=1 ./desktop/update.sh')
+"
+fi
 
 echo "==> [4/5] Оновлення фронтенду та перезапуск сервісів (:8010 та :3010)..."
 cd "$ROOT_DIR/apps/web"
