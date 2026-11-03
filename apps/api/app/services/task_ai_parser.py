@@ -280,6 +280,27 @@ NOISE_PATTERNS = re.compile(
     flags=re.IGNORECASE,
 )
 
+SUPPORT_PATTERNS = (
+    "skullpartners",
+    "skullpartnerssupport",
+    "fbshopi",
+    "support sp",
+    "tech sup",
+    "akiyama",
+    "vitka",
+    "ketri",
+)
+
+
+def is_support_sender(sender_username: Optional[str], sender_name: Optional[str]) -> bool:
+    """Визначає, чи є відправник представником нашої команди саппорту Skull Partners."""
+    u = (sender_username or "").strip().lstrip("@").lower()
+    n = (sender_name or "").strip().lower()
+    for pat in SUPPORT_PATTERNS:
+        if pat in u or pat in n:
+            return True
+    return False
+
 
 def _domain_heuristic_analyze(
     raw_text: str,
@@ -598,3 +619,168 @@ def analyze_telegram_message(
     )
     res["engine"] = "domain_ai_v2"
     return res
+
+
+def summarize_conversation_thread(
+    db: Session,
+    chat_title: str,
+    topic_id: Optional[int],
+    messages: List[Dict[str, Any]],
+    group_team_id: Optional[uuid.UUID] = None,
+    group_client_id: Optional[uuid.UUID] = None,
+) -> Dict[str, Any]:
+    """Аналізує серію останніх повідомлень діалогу (Клієнт <-> Саппорт),
+    щоб дати зрозумілу картину контексту перед постановкою задачі."""
+    client_msgs = [m for m in messages if not m.get("is_support")]
+    support_msgs = [m for m in messages if m.get("is_support")]
+
+    all_text = "\n".join(m.get("raw_text", "") for m in messages)
+    client_text = "\n".join(m.get("raw_text", "") for m in client_msgs)
+    support_text = "\n".join(m.get("raw_text", "") for m in support_msgs)
+
+    # Визначаємо основного клієнта/баєра у гілці
+    primary_client_uname = None
+    primary_client_name = None
+    for m in reversed(client_msgs):
+        if m.get("sender_username") or m.get("sender_name"):
+            primary_client_uname = m.get("sender_username")
+            primary_client_name = m.get("sender_name")
+            break
+
+    client_display = (
+        f"@{primary_client_uname.lstrip('@')} ({primary_client_name})"
+        if primary_client_uname and primary_client_name
+        else (f"@{primary_client_uname.lstrip('@')}" if primary_client_uname else (primary_client_name or "Учасник чату"))
+    )
+
+    entities = _resolve_db_entities(
+        db=db,
+        text=all_text,
+        sender_username=primary_client_uname,
+        sender_name=primary_client_name,
+        group_team_id=group_team_id,
+        group_client_id=group_client_id,
+    )
+
+    # Додатково шукаємо теги баєрів виду WebNika, WebFoxie, WebKP, WebWww у тексті видачі
+    web_tag_m = re.search(r"\b(\d*Web[A-Za-z0-9_]+)\b", all_text)
+    extracted_buyer_tag = web_tag_m.group(1) if web_tag_m else (entities.get("buyer_name") or primary_client_name or primary_client_uname)
+
+    # Ad Account IDs / BM IDs (10-17 цифр)
+    ad_acc_ids = list(dict.fromkeys(re.findall(r"\b(\d{14,17})\b", client_text or all_text)))[:6]
+
+    # Перевіряємо хронологічно: чи саппорт вже скинув готову видачу ПІСЛЯ останнього запиту/обіцянки
+    last_delivery_idx = -1
+    last_promise_idx = -1
+    last_substantive_client_idx = -1
+
+    SubstantiveClientMsgs: List[str] = []
+    for idx, m in enumerate(messages):
+        txt = (m.get("raw_text") or "").strip()
+        if m.get("is_support"):
+            if re.search(r"(?:ad\s*account\s*id|id\s*рекламного\s*аккаунта|EAA[A-Za-z0-9]{20,}|пошарила\s+на\s+почту)", txt, flags=re.IGNORECASE):
+                last_delivery_idx = idx
+            if re.search(r"(?:скажу\s+через|через\s+минут|возьму\s+в\s+работу|сегодня\s+дам|сажусь\s+делать)", txt, flags=re.IGNORECASE):
+                last_promise_idx = idx
+        else:
+            txt_no_mentions = re.sub(r"@[A-Za-z0-9_]+", "", txt).strip()
+            if len(txt_no_mentions) >= 6 and not NOISE_PATTERNS.match(txt_no_mentions) and not re.match(r"^(?:окей,?\s*попробую|спасибо\s*жду|супер,?\s*спасибо).*$", txt_no_mentions, flags=re.IGNORECASE):
+                SubstantiveClientMsgs.append(txt_no_mentions)
+                last_substantive_client_idx = idx
+
+    delivered_in_support = last_delivery_idx >= 0
+    promised_later = last_promise_idx > last_delivery_idx
+
+    latest_client_request = SubstantiveClientMsgs[-1] if SubstantiveClientMsgs else (client_text.strip() or all_text.strip())
+    all_client_requests_low = "\n".join(SubstantiveClientMsgs).lower() if SubstantiveClientMsgs else all_text.lower()
+
+    # Визначаємо суть запиту клієнта та формуємо зрозумілий заголовок і опис контексту
+    category: str = "general"
+    priority: str = "medium"
+    who_suffix = f" ({extracted_buyer_tag})" if extracted_buyer_tag else ""
+
+    if any(w in all_client_requests_low for w in ("не спенд", "не крут", "кабы не", "каби не", "биллинг", "білінг", "деклайн", "decline", "карт")):
+        category = "card_issue"
+        priority = "high"
+        acc_str = f" {', '.join(ad_acc_ids[:2])}" if ad_acc_ids else ""
+        suggested_title = f"Перевірити чому не спендять кабінети{acc_str}{who_suffix}"
+    elif any(w in all_client_requests_low for w in ("аунтефикац", "аутентификац", "почт", "пошт", "парол", "не заходит", "чек", "селф", "2fa", "ошибк")):
+        category = "account_check"
+        priority = "high"
+        if "фанк" in all_client_requests_low or "фп" in all_client_requests_low:
+            suggested_title = f"Доступ до пошти (2FA) та ID нової ФП Express Exchange{who_suffix}"
+        else:
+            suggested_title = f"Допомогти з доступом до пошти / 2FA / чеком профілю{who_suffix}"
+    elif any(w in all_client_requests_low for w in ("айди у фанки", "айди у фп", "фанк", "фп", "express exchange", "бм", "пиксел", "піксел", "перешар", "розшар")):
+        category = "bm_share"
+        priority = "medium"
+        if "фанк" in all_client_requests_low or "фп" in all_client_requests_low:
+            suggested_title = f"Надати ID нової ФП (Fan Page) та перевірити прив'язку{who_suffix}"
+        else:
+            suggested_title = f"Перевірити розшарку БМ / Пікселя{who_suffix}"
+    elif any(w in all_client_requests_low for w in ("выдадите", "ожидать", "новый соц", "дайте", "нужно", "аків", "акков", "запрос")):
+        category = "issue_accounts"
+        priority = "high"
+        suggested_title = f"Видати нові акаунти / соц та розшарити кабінети{who_suffix}"
+    elif delivered_in_support and not SubstantiveClientMsgs:
+        category = "issue_accounts"
+        priority = "low"
+        suggested_title = f"Видача кабінетів та БМ{who_suffix}"
+    else:
+        clean_req = re.sub(r"\s+", " ", latest_client_request)[:80]
+        suggested_title = f"{clean_req}{who_suffix}" if clean_req else f"Запит у чаті{who_suffix}"
+
+    # Статус діалогу (чи потрібна задача, чи вже закрито саппортом)
+    if delivered_in_support and last_delivery_idx > last_substantive_client_idx and not promised_later:
+        resolution_state = "resolved_in_chat"
+        status_explain = "Саппорт уже видав кабінети / БМ у цьому діалозі."
+    elif promised_later or last_substantive_client_idx > last_delivery_idx:
+        # Якщо саппорт вже відповів (напр. дав пораду або пароль) ПІСЛЯ останнього запиту клієнта, але ще пообіцяв щось (promised_later)
+        if promised_later:
+            resolution_state = "needs_action"
+            status_explain = "Саппорт пообіцяв надати інфо/виконати запит (потребує задачі або контролю)."
+        elif support_msgs and messages[-1].get("is_support"):
+            resolution_state = "waiting_client"
+            status_explain = "Саппорт надав відповідь/дані у чаті, очікується перевірка клієнтом."
+        else:
+            resolution_state = "needs_action"
+            status_explain = "Клієнт очікує на вирішення або перевірку з боку команди."
+    else:
+        resolution_state = "waiting_client"
+        status_explain = "Саппорт надав відповідь у чаті, очікується реакція клієнта."
+
+    # Змістовне резюме контексту
+    summary_parts: List[str] = []
+    if SubstantiveClientMsgs:
+        summary_parts.append(f"Запит клієнта ({client_display}): «{' / '.join(SubstantiveClientMsgs[-2:])}».")
+    if support_msgs:
+        last_sup = [
+            re.sub(r"\s+", " ", (m.get("raw_text") or "").strip())[:110]
+            for m in support_msgs[-2:]
+            if (m.get("raw_text") or "").strip()
+        ]
+        if delivered_in_support:
+            summary_parts.append("Відповідь саппорту: видано реквізити кабінетів (Ad account ID) та токен/БМ.")
+        elif last_sup:
+            summary_parts.append(f"Відповідь саппорту: «{' -> '.join(last_sup)}».")
+    summary_parts.append(status_explain)
+
+    checklist = _build_checklist(category, entities)
+
+    return {
+        "topic_id": topic_id,
+        "client_display": client_display,
+        "buyer_tag": extracted_buyer_tag,
+        "buyer_id": entities.get("buyer_id"),
+        "buyer_name": entities.get("buyer_name"),
+        "team_id": entities.get("team_id"),
+        "client_id": entities.get("client_id"),
+        "resolution_state": resolution_state,  # needs_action | waiting_client | resolved_in_chat
+        "category": category,
+        "priority": priority,
+        "suggested_title": suggested_title,
+        "context_summary": " ".join(summary_parts),
+        "ad_account_ids": ad_acc_ids,
+        "entities": entities,
+        "checklist": checklist,
+    }

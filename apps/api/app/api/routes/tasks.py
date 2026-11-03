@@ -61,11 +61,23 @@ class TelegramGroupCreateIn(BaseModel):
     username: Optional[str] = None
     chat_type: str = "supergroup"
     is_monitored: bool = True
-    auto_create_tasks: bool = True
+    auto_create_tasks: bool = False
     team_id: Optional[uuid.UUID] = None
     client_id: Optional[uuid.UUID] = None
     default_assignee_id: Optional[uuid.UUID] = None
     topic_filter: Optional[str] = None
+
+
+class CreateFromThreadIn(BaseModel):
+    chat_id: int
+    topic_id: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    priority: Optional[str] = None
+    assignee_id: Optional[uuid.UUID] = None
+    buyer_id: Optional[uuid.UUID] = None
+    team_id: Optional[uuid.UUID] = None
 
 
 class TelegramGroupPatchIn(BaseModel):
@@ -291,11 +303,13 @@ def get_tasks_overview(
 
     groups = db.scalars(select(TelegramGroup).order_by(TelegramGroup.created_at.asc())).all()
     recent_logs = db.scalars(select(TelegramMessageLog).order_by(TelegramMessageLog.sent_at.desc(), TelegramMessageLog.id.desc()).limit(60)).all()
+    threads = telegram_tasks.build_conversation_threads(db, groups, tasks_by_id)
 
     return {
         "stats": stats,
         "tasks": [_serialize_task(t, users_map, teams_map, buyers_map, clients_map) for t in filtered],
         "groups": [_serialize_group(g, teams_map, clients_map, users_map) for g in groups],
+        "threads": threads,
         "recent_messages": [_serialize_log(l, tasks_by_id) for l in recent_logs],
         "telegram_state": telegram_tasks.get_telegram_state(db),
         "ai_config": task_ai_parser.get_ai_config(db),
@@ -304,6 +318,27 @@ def get_tasks_overview(
         "buyers": [{"id": str(b.id), "name": b.name, "team_id": str(b.team_id) if b.team_id else None} for b in buyers_map.values()],
         "clients": [{"id": str(c.id), "name": c.name} for c in clients_map.values()],
     }
+
+
+@router.post("/from-thread", status_code=201)
+def create_task_from_thread_endpoint(body: CreateFromThreadIn, db: Session = Depends(get_db), user: User = Depends(can_write)):
+    try:
+        t = telegram_tasks.create_task_from_thread(
+            db=db,
+            chat_id=body.chat_id,
+            topic_id=body.topic_id,
+            title=body.title,
+            description=body.description,
+            category=body.category,
+            priority=body.priority,
+            assignee_id=body.assignee_id,
+            buyer_id=body.buyer_id,
+            team_id=body.team_id,
+            creator=user,
+        )
+        return {"id": str(t.id), "code": t.code, "title": t.title}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

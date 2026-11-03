@@ -43,6 +43,7 @@ import type {
   TasksOverview,
   TaskStatus,
   TeamTaskItem,
+  TelegramConversationThread,
   TelegramGroupItem,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -159,6 +160,8 @@ export default function TasksPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [creatingTask, setCreatingTask] = useState(false);
   const [addingGroup, setAddingGroup] = useState(false);
+  const [threadForTask, setThreadForTask] = useState<TelegramConversationThread | null>(null);
+  const [showAllThreads, setShowAllThreads] = useState(false);
 
   const queryParams = new URLSearchParams();
   if (filterCat) queryParams.set("category", filterCat);
@@ -536,10 +539,162 @@ export default function TasksPage() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          TAB 1: ДОШКА ЗАДАЧ (КАНБАН / СПИСОК)
+          TAB 1: ДОШКА ЗАДАЧ (КАНБАН / СПИСОК) + КОНТЕКСТ ОСТАННІХ ДІАЛОГІВ ТГ
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "board" && (
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* Блок: Останні повідомлення та контекст по гілках Telegram для свідомої постановки задач */}
+          {data?.threads && data.threads.length > 0 && (
+            <div className="panel space-y-3.5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Bot size={18} className="text-purple-400" />
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-main">
+                      Останні діалоги в Telegram (Контекст перед постановкою задачі)
+                    </h2>
+                    <p className="text-[12px] text-muted">
+                      Повідомлення згруповані за гілками/клієнтами (👤 Клієнт ↔ 🛠 Саппорт), щоб бачити всю переписку й ставити задачу осмислено.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setShowAllThreads((v) => !v)}>
+                    {showAllThreads
+                      ? "Показати лише активні діалоги"
+                      : `Показати всі діалоги (${data.threads.length})`}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
+                {(showAllThreads
+                  ? data.threads
+                  : data.threads.filter((th) => th.resolution_state !== "resolved_in_chat").slice(0, 4)
+                ).map((th) => {
+                  const cat = CATEGORY_META[th.category] || CATEGORY_META.general;
+                  const stateStyle =
+                    th.resolution_state === "needs_action"
+                      ? { label: "Потребує уваги / задачі", fg: "#fbbf24", bg: "rgba(245, 158, 11, 0.14)" }
+                      : th.resolution_state === "waiting_client"
+                        ? { label: "Очікує клієнта", fg: "#60a5fa", bg: "rgba(59, 130, 246, 0.14)" }
+                        : { label: "Вирішено саппортом у чаті", fg: "#34d399", bg: "rgba(16, 185, 129, 0.14)" };
+
+                  return (
+                    <div
+                      key={th.thread_key}
+                      className="flex flex-col justify-between gap-3 rounded-xl border border-line-strong bg-inset/70 p-3.5"
+                    >
+                      <div className="space-y-2.5">
+                        {/* Шапка діалогу */}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                            <span className="rounded bg-surface px-2 py-0.5 font-semibold text-main">
+                              💬 {th.chat_title}
+                              {th.topic_id ? ` · Гілка #${th.topic_id}` : ""}
+                            </span>
+                            <span className="font-mono font-semibold text-accent">{th.client_display}</span>
+                          </div>
+                          <span
+                            className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                            style={{ color: stateStyle.fg, background: stateStyle.bg }}
+                          >
+                            {stateStyle.label}
+                          </span>
+                        </div>
+
+                        {/* ШІ-висновок по всій гілці */}
+                        <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[13.5px] font-semibold text-main">{th.suggested_title}</span>
+                            <span
+                              className="shrink-0 rounded px-2 py-0.5 text-[10.5px] font-medium"
+                              style={{ color: cat.color, background: cat.bg }}
+                            >
+                              {cat.label}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-[12px] text-muted">{th.context_summary}</div>
+                        </div>
+
+                        {/* Стрічка останніх повідомлень цього діалогу */}
+                        <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-line bg-surface p-2.5 text-[12px]">
+                          <div className="text-[10.5px] font-semibold uppercase tracking-wider text-faint">
+                            Останні повідомлення діалогу ({th.messages_count}):
+                          </div>
+                          {th.messages.slice(-6).map((m) => (
+                            <div
+                              key={m.id}
+                              className={cn(
+                                "rounded px-2.5 py-1.5",
+                                m.is_support
+                                  ? "border-l-2 border-emerald-500/60 bg-emerald-500/5 text-muted"
+                                  : "border-l-2 border-accent bg-inset text-main",
+                              )}
+                            >
+                              <div className="flex items-center justify-between text-[10.5px]">
+                                <span className={cn("font-semibold", m.is_support ? "text-emerald-400" : "text-accent")}>
+                                  {m.is_support
+                                    ? `🛠 Саппорт (${m.sender_name || m.sender_username || "SP"})`
+                                    : `👤 Клієнт (@${m.sender_username || m.sender_name || "user"})`}
+                                </span>
+                                {m.sent_at && (
+                                  <span className="font-mono text-faint">
+                                    {new Date(m.sent_at).toLocaleTimeString("uk-UA", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-0.5 whitespace-pre-wrap break-words text-[12px] leading-snug">
+                                {m.raw_text.length > 220 ? m.raw_text.slice(0, 220) + "…" : m.raw_text}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Нижня панель дій по діалогу */}
+                      <div className="flex items-center justify-between gap-2 border-t border-divider pt-2">
+                        <div className="flex flex-wrap gap-1.5 text-[11px]">
+                          {th.buyer_tag && (
+                            <span className="rounded border border-line-strong bg-surface px-2 py-0.5 font-mono text-main">
+                              👤 {th.buyer_tag}
+                            </span>
+                          )}
+                          {th.ad_account_ids.slice(0, 2).map((aid) => (
+                            <span
+                              key={aid}
+                              className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-amber-300"
+                            >
+                              ID: {aid}
+                            </span>
+                          ))}
+                        </div>
+
+                        {th.linked_task_id && th.linked_task_code ? (
+                          <button
+                            onClick={() => setSelectedTaskId(th.linked_task_id)}
+                            className="cursor-pointer rounded-md border border-accent bg-accent/15 px-3 py-1 font-mono text-[12px] font-bold text-accent hover:bg-accent/25"
+                          >
+                            Відкрити {th.linked_task_code} →
+                          </button>
+                        ) : (
+                          editable && (
+                            <Button size="sm" variant="primary" onClick={() => setThreadForTask(th)}>
+                              <Plus size={14} /> Поставити задачу з контексту
+                            </Button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Панель фільтрів */}
           <div className="panel flex flex-wrap items-center gap-3 p-3.5">
             <div className="relative min-w-[220px] flex-1">
@@ -691,11 +846,32 @@ export default function TasksPage() {
                                 {task.title}
                               </div>
 
-                              {/* Original Telegram snippet */}
-                              {task.raw_source_text && (
-                                <div className="line-clamp-2 rounded border-l-2 border-purple-500/50 bg-inset px-2.5 py-1.5 text-[12px] italic text-muted">
-                                  «{task.raw_source_text}»
+                              {/* Останні повідомлення діалогу або оригінальна цитата з Telegram */}
+                              {ctx.thread_messages && ctx.thread_messages.length > 0 ? (
+                                <div className="space-y-1 rounded-md border border-line bg-inset p-2 text-[11.5px]">
+                                  <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+                                    Контекст діалогу ({ctx.thread_messages.length} повід.):
+                                  </div>
+                                  {ctx.thread_messages.slice(-3).map((tm) => (
+                                    <div key={tm.id} className="line-clamp-2 leading-snug">
+                                      <span
+                                        className={cn(
+                                          "font-semibold",
+                                          tm.is_support ? "text-emerald-400" : "text-accent",
+                                        )}
+                                      >
+                                        {tm.is_support ? "🛠 Саппорт: " : `👤 @${tm.sender_username || tm.sender_name || "Клієнт"}: `}
+                                      </span>
+                                      <span className="text-muted">{tm.raw_text}</span>
+                                    </div>
+                                  ))}
                                 </div>
+                              ) : (
+                                task.raw_source_text && (
+                                  <div className="line-clamp-3 whitespace-pre-wrap rounded border-l-2 border-purple-500/50 bg-inset px-2.5 py-1.5 text-[12px] italic text-muted">
+                                    «{task.raw_source_text}»
+                                  </div>
+                                )
                               )}
 
                               {/* Extracted AI entities tags */}
@@ -1573,6 +1749,19 @@ export default function TasksPage() {
           }}
         />
       )}
+
+      {/* Модальне вікно постановки задачі з контексту діалогу Telegram */}
+      {threadForTask && data && (
+        <CreateTaskFromThreadModal
+          thread={threadForTask}
+          overview={data}
+          onClose={() => setThreadForTask(null)}
+          onCreated={() => {
+            setThreadForTask(null);
+            mutate();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1767,13 +1956,51 @@ function TaskDetailModal({
               )}
             </div>
 
-            {task.raw_source_text && (
-              <div className="rounded-md border border-line bg-inset p-3 text-[13px] text-main">
-                <div className="mb-1 font-mono text-[11px] text-accent">
-                  {task.telegram_sender || "Повідомлення з чату"}:
+            {ctx.thread_messages && ctx.thread_messages.length > 0 ? (
+              <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-lg border border-line bg-inset p-3 text-[12.5px]">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-faint">
+                  Історія повідомлень діалогу ({ctx.thread_messages.length}):
                 </div>
-                «{task.raw_source_text}»
+                {ctx.thread_messages.map((tm) => (
+                  <div
+                    key={tm.id}
+                    className={cn(
+                      "rounded px-2.5 py-1.5",
+                      tm.is_support
+                        ? "border-l-2 border-emerald-500/60 bg-emerald-500/5 text-muted"
+                        : "border-l-2 border-accent bg-surface text-main",
+                    )}
+                  >
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className={cn("font-semibold", tm.is_support ? "text-emerald-400" : "text-accent")}>
+                        {tm.is_support
+                          ? `🛠 Саппорт (${tm.sender_name || tm.sender_username || "SP"})`
+                          : `👤 Клієнт (@${tm.sender_username || tm.sender_name || "user"})`}
+                      </span>
+                      {tm.sent_at && (
+                        <span className="font-mono text-faint">
+                          {new Date(tm.sent_at).toLocaleString("uk-UA", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 whitespace-pre-wrap break-words">{tm.raw_text}</div>
+                  </div>
+                ))}
               </div>
+            ) : (
+              task.raw_source_text && (
+                <div className="whitespace-pre-wrap rounded-md border border-line bg-inset p-3 text-[13px] text-main">
+                  <div className="mb-1 font-mono text-[11px] text-accent">
+                    {task.telegram_sender || "Повідомлення з чату"}:
+                  </div>
+                  «{task.raw_source_text}»
+                </div>
+              )
             )}
 
             <div className="flex flex-wrap gap-2 text-[12px]">
@@ -2150,6 +2377,176 @@ function AddTelegramGroupModal({
           </Button>
           <Button variant="primary" onClick={submit} disabled={busy || !title.trim()}>
             Додати групу
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Модальне вікно постановки задачі з контексту діалогу Telegram
+   ───────────────────────────────────────────────────────────────────────────── */
+function CreateTaskFromThreadModal({
+  thread,
+  overview,
+  onClose,
+  onCreated,
+}: {
+  thread: TelegramConversationThread;
+  overview: TasksOverview;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [title, setTitle] = useState(thread.suggested_title);
+  const [description, setDescription] = useState(thread.context_summary);
+  const [category, setCategory] = useState<TaskCategory>(thread.category);
+  const [priority, setPriority] = useState<TaskPriority>(thread.priority);
+  const [assigneeId, setAssigneeId] = useState("");
+  const [teamId, setTeamId] = useState(thread.team_id || "");
+  const [buyerId, setBuyerId] = useState(thread.buyer_id || "");
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (!title.trim()) return;
+    setBusy(true);
+    try {
+      await api("/tasks/from-thread", {
+        method: "POST",
+        body: {
+          chat_id: thread.chat_id,
+          topic_id: thread.topic_id,
+          title: title.trim(),
+          description: description.trim() || null,
+          category,
+          priority,
+          assignee_id: assigneeId || null,
+          team_id: teamId || null,
+          buyer_id: buyerId || null,
+        },
+      });
+      onCreated();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Поставити задачу з діалогу: ${thread.chat_title}${thread.topic_id ? ` · Гілка #${thread.topic_id}` : ""}`}
+      onClose={onClose}
+      width="max-w-2xl"
+    >
+      <div className="max-h-[80vh] space-y-4 overflow-y-auto pr-1">
+        {/* Перегляд останніх повідомлень діалогу */}
+        <div className="space-y-1.5 rounded-lg border border-line bg-inset p-3 text-[12px]">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-faint">
+            Останні повідомлення цього діалогу ({thread.messages_count}), які будуть прикріплені до задачі:
+          </div>
+          <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
+            {thread.messages.map((m) => (
+              <div
+                key={m.id}
+                className={cn(
+                  "rounded px-2.5 py-1.5",
+                  m.is_support
+                    ? "border-l-2 border-emerald-500/60 bg-emerald-500/5 text-muted"
+                    : "border-l-2 border-accent bg-surface text-main",
+                )}
+              >
+                <div className="flex items-center justify-between text-[10.5px]">
+                  <span className={cn("font-semibold", m.is_support ? "text-emerald-400" : "text-accent")}>
+                    {m.is_support
+                      ? `🛠 Саппорт (${m.sender_name || m.sender_username || "SP"})`
+                      : `👤 Клієнт (@${m.sender_username || m.sender_name || "user"})`}
+                  </span>
+                  {m.sent_at && (
+                    <span className="font-mono text-faint">
+                      {new Date(m.sent_at).toLocaleString("uk-UA", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 whitespace-pre-wrap break-words">{m.raw_text}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Field label="Назва задачі (сформовано ШІ з контексту діалогу — можна відредагувати)">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+
+        <Field label="Опис контексту для виконавця">
+          <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Категорія">
+            <Select value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)}>
+              {Object.entries(CATEGORY_META).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Пріоритет">
+            <Select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
+              <option value="urgent">Терміново 🔥</option>
+              <option value="high">Високий</option>
+              <option value="medium">Середній</option>
+              <option value="low">Низький</option>
+            </Select>
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Відповідальний">
+            <Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+              <option value="">Не призначено</option>
+              {overview.users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Команда">
+            <Select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">Без команди</option>
+              {overview.teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Баєр">
+            <Select value={buyerId} onChange={(e) => setBuyerId(e.target.value)}>
+              <option value="">Без баєра</option>
+              {overview.buyers.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>
+            Скасувати
+          </Button>
+          <Button variant="primary" onClick={submit} disabled={busy || !title.trim()}>
+            <Plus size={14} /> Поставити задачу в роботу
           </Button>
         </div>
       </div>

@@ -173,11 +173,30 @@ export interface TeamTaskItem {
   checklist: TaskChecklistItem[]; checklist_done: number; checklist_total: number;
   ai_context: {
     confidence?: number; engine?: string; reasoning?: string; suggested_reply?: string | null;
-    account_codes?: string[]; card_last4?: string[]; bm_id?: string | null;
+    account_codes?: string[]; card_last4?: string[]; ad_account_ids?: string[]; bm_id?: string | null;
     qty?: number | null; geo?: string | null; limit?: string | null; context_used?: number;
+    thread_messages?: TelegramThreadMessage[];
   };
   comments: TaskCommentItem[];
   due_at: string | null; completed_at: string | null; created_at: string; updated_at: string;
+}
+
+export interface TelegramThreadMessage {
+  id: number; message_id: number; reply_to_msg_id: number | null;
+  sender_username: string | null; sender_name: string | null;
+  is_support: boolean; raw_text: string; message_link: string | null; sent_at: string | null;
+}
+
+export interface TelegramConversationThread {
+  thread_key: string; group_id: string | null; chat_id: number; chat_title: string;
+  topic_id: number | null; client_display: string; buyer_tag: string | null;
+  buyer_id: string | null; buyer_name: string | null; team_id: string | null; client_id: string | null;
+  resolution_state: "needs_action" | "waiting_client" | "resolved_in_chat";
+  category: TaskCategory; priority: TaskPriority;
+  suggested_title: string; context_summary: string; ad_account_ids: string[];
+  checklist: TaskChecklistItem[]; messages: TelegramThreadMessage[]; messages_count: number;
+  linked_task_id: string | null; linked_task_code: string | null; linked_task_status: string | null;
+  last_message_at: string | null;
 }
 
 export interface TelegramGroupItem {
@@ -222,6 +241,7 @@ export interface TasksOverview {
   };
   tasks: TeamTaskItem[];
   groups: TelegramGroupItem[];
+  threads: TelegramConversationThread[];
   recent_messages: TelegramMessageLogItem[];
   telegram_state: TelegramAccountState;
   ai_config: TasksAiConfig;

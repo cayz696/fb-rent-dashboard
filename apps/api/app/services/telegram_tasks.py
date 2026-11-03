@@ -224,7 +224,12 @@ async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25) ->
                         if sender
                         else None
                     )
-                    reply_id = m.reply_to.reply_to_msg_id if getattr(m, "reply_to", None) else None
+                    reply_obj = getattr(m, "reply_to", None)
+                    reply_id = (
+                        (getattr(reply_obj, "reply_to_top_id", None) or getattr(reply_obj, "reply_to_msg_id", None))
+                        if reply_obj
+                        else None
+                    )
                     res = ingest_message(
                         db=db,
                         group=g,
@@ -234,6 +239,7 @@ async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25) ->
                         message_id=int(m.id),
                         reply_to_msg_id=reply_id,
                         sent_at=m.date if getattr(m, "date", None) else None,
+                        allow_auto_task=False,
                     )
                     new_msgs += 1
                     if res.get("task_created"):
@@ -261,8 +267,9 @@ def ingest_message(
     reply_to_msg_id: Optional[int] = None,
     sent_at: Optional[dt.datetime] = None,
     force_create_task: bool = False,
+    allow_auto_task: bool = False,
 ) -> Dict[str, Any]:
-    """Приймає повідомлення з Telegram-групи, підтягує контекст треду, аналізує через ШІ та створює задачу."""
+    """Приймає повідомлення з Telegram-групи, підтягує контекст треду, аналізує через ШІ та логує в потік."""
     now = sent_at or dt.datetime.now(dt.timezone.utc)
     if message_id is None:
         max_id = db.scalar(select(func.max(TelegramMessageLog.message_id)).where(TelegramMessageLog.chat_id == group.chat_id))
@@ -293,6 +300,7 @@ def ingest_message(
         if line not in context_messages:
             context_messages.append(line)
 
+    is_sup = task_ai_parser.is_support_sender(sender_username, sender_name)
     ai_result = task_ai_parser.analyze_telegram_message(
         db=db,
         raw_text=raw_text,
@@ -305,11 +313,18 @@ def ingest_message(
         group_client_id=group.client_id,
         topic_filter=group.topic_filter,
     )
+    if is_sup and not force_create_task:
+        ai_result["is_actionable"] = False
+        ai_result["reasoning"] = "Повідомлення від саппорту нашої команди (частина діалогу)."
 
     cfg = task_ai_parser.get_ai_config(db)
     threshold = int(cfg.get("confidence_threshold", 60))
     should_create = force_create_task or (
-        group.auto_create_tasks and ai_result.get("is_actionable", False) and int(ai_result.get("confidence", 0)) >= threshold
+        allow_auto_task
+        and not is_sup
+        and group.auto_create_tasks
+        and ai_result.get("is_actionable", False)
+        and int(ai_result.get("confidence", 0)) >= threshold
     )
 
     # Формуємо посилання на повідомлення в Telegram
@@ -449,6 +464,238 @@ def convert_task_to_account_request(db: Session, task: TeamTask, actor: str) -> 
         task.status = "in_progress"
     db.commit()
     return req
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Побудова контекстних діалогів (останні повідомлення по гілках/топіках)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_conversation_threads(
+    db: Session,
+    groups: List[TelegramGroup],
+    tasks_by_id: Dict[uuid.UUID, TeamTask],
+) -> List[Dict[str, Any]]:
+    """Групує останні повідомлення в кожній Telegram-групі за гілками діалогу (топіками або ланцюжками відповідей)
+    та формує ШІ-резюме контексту, щоб менеджер бачив повну картину перед постановкою задачі."""
+    groups_by_id = {g.id: g for g in groups}
+    all_logs = db.scalars(
+        select(TelegramMessageLog)
+        .order_by(TelegramMessageLog.chat_id, TelegramMessageLog.message_id.asc())
+    ).all()
+
+    by_chat: Dict[int, List[TelegramMessageLog]] = {}
+    for l in all_logs:
+        by_chat.setdefault(l.chat_id, []).append(l)
+
+    threads_out: List[Dict[str, Any]] = []
+
+    for chat_id, chat_logs in by_chat.items():
+        if not chat_logs:
+            continue
+        group_obj = groups_by_id.get(chat_logs[-1].group_id) if chat_logs[-1].group_id else None
+        chat_title = group_obj.title if group_obj else (chat_logs[-1].chat_title or f"Chat {chat_id}")
+
+        # Будуємо мапу message_id -> reply_to_msg_id, щоб знайти кореневий топік для кожної відповіді
+        parent_map: Dict[int, Optional[int]] = {l.message_id: l.reply_to_msg_id for l in chat_logs}
+
+        def find_root_topic(m_id: int, r_id: Optional[int]) -> int:
+            if not r_id:
+                return 0
+            cur = r_id
+            visited = {m_id}
+            while cur in parent_map and parent_map[cur] is not None and parent_map[cur] not in visited:
+                visited.add(cur)
+                cur = parent_map[cur]  # піднімаємося до кореня гілки/топіка (напр. 1075 -> 1073 -> 4)
+            return cur
+
+        buckets: Dict[int, List[TelegramMessageLog]] = {}
+        for l in chat_logs:
+            root_id = find_root_topic(l.message_id, l.reply_to_msg_id)
+            buckets.setdefault(root_id, []).append(l)
+
+        # Якщо в групі є основні топіки та поодинокі повідомлення без reply (root_id=0),
+        # або це звичайний чат без топіків — залишаємо останні 12 повідомлень на гілку
+        for topic_id, t_logs in buckets.items():
+            recent_slice = t_logs[-12:]
+            # Якщо це одиночне технічне слово саппорту типу "готово" без клієнтських повідомлень — пропускаємо
+            if len(recent_slice) == 1 and task_ai_parser.is_support_sender(recent_slice[0].sender_username, recent_slice[0].sender_name):
+                if len((recent_slice[0].raw_text or "").strip()) < 15:
+                    continue
+            msg_dicts: List[Dict[str, Any]] = []
+            linked_task: Optional[TeamTask] = None
+
+            for rl in recent_slice:
+                is_sup = task_ai_parser.is_support_sender(rl.sender_username, rl.sender_name)
+                if rl.task_id and rl.task_id in tasks_by_id:
+                    linked_task = tasks_by_id[rl.task_id]
+                msg_dicts.append(
+                    {
+                        "id": rl.id,
+                        "message_id": rl.message_id,
+                        "reply_to_msg_id": rl.reply_to_msg_id,
+                        "sender_username": rl.sender_username,
+                        "sender_name": rl.sender_name,
+                        "is_support": is_sup,
+                        "raw_text": rl.raw_text,
+                        "message_link": rl.message_link,
+                        "sent_at": rl.sent_at.isoformat() if rl.sent_at else None,
+                    }
+                )
+
+            summary = task_ai_parser.summarize_conversation_thread(
+                db=db,
+                chat_title=chat_title,
+                topic_id=topic_id if topic_id > 0 else None,
+                messages=msg_dicts,
+                group_team_id=group_obj.team_id if group_obj else None,
+                group_client_id=group_obj.client_id if group_obj else None,
+            )
+
+            last_dt = recent_slice[-1].sent_at
+            threads_out.append(
+                {
+                    "thread_key": f"{chat_id}:{topic_id}",
+                    "group_id": str(group_obj.id) if group_obj else None,
+                    "chat_id": chat_id,
+                    "chat_title": chat_title,
+                    "topic_id": topic_id if topic_id > 0 else None,
+                    "client_display": summary["client_display"],
+                    "buyer_tag": summary["buyer_tag"],
+                    "buyer_id": summary["buyer_id"],
+                    "buyer_name": summary["buyer_name"],
+                    "team_id": summary["team_id"],
+                    "client_id": summary["client_id"],
+                    "resolution_state": summary["resolution_state"],
+                    "category": summary["category"],
+                    "priority": summary["priority"],
+                    "suggested_title": summary["suggested_title"],
+                    "context_summary": summary["context_summary"],
+                    "ad_account_ids": summary["ad_account_ids"],
+                    "entities": summary["entities"],
+                    "checklist": summary["checklist"],
+                    "messages": msg_dicts,
+                    "messages_count": len(msg_dicts),
+                    "linked_task_id": str(linked_task.id) if linked_task else None,
+                    "linked_task_code": linked_task.code if linked_task else None,
+                    "linked_task_status": linked_task.status if linked_task else None,
+                    "last_message_at": last_dt.isoformat() if last_dt else None,
+                }
+            )
+
+    # Сортуємо діалоги: спочатку ті, що потребують дії (needs_action), далі за часом останнього повідомлення
+    state_order = {"needs_action": 0, "waiting_client": 1, "resolved_in_chat": 2}
+    threads_out.sort(
+        key=lambda x: (
+            state_order.get(x["resolution_state"], 9),
+            -(dt.datetime.fromisoformat(x["last_message_at"]).timestamp() if x.get("last_message_at") else 0),
+        )
+    )
+    return threads_out
+
+
+def create_task_from_thread(
+    db: Session,
+    chat_id: int,
+    topic_id: Optional[int],
+    title: Optional[str],
+    description: Optional[str],
+    category: Optional[str],
+    priority: Optional[str],
+    assignee_id: Optional[uuid.UUID],
+    buyer_id: Optional[uuid.UUID],
+    team_id: Optional[uuid.UUID],
+    creator: User,
+) -> TeamTask:
+    """Створює повноцінну задачу з контексту всього діалогу (включаючи останні повідомлення переписки)."""
+    groups = db.scalars(select(TelegramGroup)).all()
+    tasks_by_id = {t.id: t for t in db.scalars(select(TeamTask)).all()}
+    threads = build_conversation_threads(db, groups, tasks_by_id)
+    target_key = f"{chat_id}:{topic_id or 0}"
+    thread = next((th for th in threads if th["thread_key"] == target_key), None)
+    if not thread:
+        raise ValueError("Гілку діалогу не знайдено")
+
+    group_obj = db.get(TelegramGroup, uuid.UUID(thread["group_id"])) if thread.get("group_id") else None
+    msgs = thread["messages"]
+    ents = thread.get("entities") or {}
+
+    final_title = (title or "").strip() or thread["suggested_title"]
+    final_desc = (description or "").strip() or thread["context_summary"]
+    final_cat = category or thread["category"]
+    final_prio = priority or thread["priority"]
+    final_buyer_id = buyer_id or (uuid.UUID(thread["buyer_id"]) if thread.get("buyer_id") else None)
+    final_team_id = team_id or (uuid.UUID(thread["team_id"]) if thread.get("team_id") else (group_obj.team_id if group_obj else None))
+    final_client_id = uuid.UUID(thread["client_id"]) if thread.get("client_id") else (group_obj.client_id if group_obj else None)
+    final_assignee = assignee_id or (group_obj.default_assignee_id if group_obj else creator.id)
+
+    # Формуємо читабельний транскрипт останніх повідомлень діалогу для швидкого перегляду
+    transcript_lines = []
+    for m in msgs[-8:]:
+        role_tag = "🛠 Саппорт" if m.get("is_support") else f"👤 @{m.get('sender_username') or m.get('sender_name') or 'Клієнт'}"
+        short_txt = (m.get("raw_text") or "").strip()
+        if len(short_txt) > 220:
+            short_txt = short_txt[:220] + "…"
+        transcript_lines.append(f"{role_tag}: {short_txt}")
+
+    last_msg_link = msgs[-1].get("message_link") if msgs else None
+
+    task = TeamTask(
+        title=final_title,
+        description=final_desc,
+        raw_source_text="\n".join(transcript_lines),
+        status="todo",
+        priority=final_prio,
+        category=final_cat,
+        source="telegram",
+        telegram_group_id=group_obj.id if group_obj else None,
+        telegram_chat_title=thread["chat_title"] + (f" · Гілка #{topic_id}" if topic_id else ""),
+        telegram_sender=thread["client_display"],
+        telegram_message_link=last_msg_link,
+        assignee_id=final_assignee,
+        creator_id=creator.id,
+        team_id=final_team_id,
+        buyer_id=final_buyer_id,
+        client_id=final_client_id,
+        checklist=thread.get("checklist") or [],
+        ai_context={
+            "confidence": 92,
+            "engine": "thread_context_v2",
+            "reasoning": thread["context_summary"],
+            "thread_messages": msgs[-10:],
+            "ad_account_ids": thread.get("ad_account_ids") or [],
+            "account_codes": ents.get("account_codes") or [],
+            "card_last4": ents.get("card_last4") or [],
+            "bm_id": ents.get("bm_id"),
+            "qty": ents.get("qty"),
+            "geo": ents.get("geo"),
+            "limit": ents.get("limit"),
+            "context_used": len(msgs),
+        },
+        comments=[
+            {
+                "id": str(uuid.uuid4())[:8],
+                "author": creator.name,
+                "text": f"Задачу поставлено на основі контексту діалогу ({len(msgs)} повідомлень) у групі «{thread['chat_title']}».",
+                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            }
+        ],
+    )
+    db.add(task)
+    db.flush()
+
+    # Прив'язуємо повідомлення цієї гілки до створеної задачі
+    msg_ids = [m["id"] for m in msgs]
+    if msg_ids:
+        for l in db.scalars(select(TelegramMessageLog).where(TelegramMessageLog.id.in_(msg_ids))).all():
+            l.task_id = task.id
+            l.is_actionable = True
+
+    if group_obj:
+        group_obj.tasks_created = (group_obj.tasks_created or 0) + 1
+
+    db.commit()
+    db.refresh(task)
+    return task
 
 
 # ─────────────────────────────────────────────────────────────────────────────
