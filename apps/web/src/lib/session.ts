@@ -23,11 +23,11 @@ export const ALL_SECTIONS = [
 ] as const;
 
 export function useMe() {
-  const { data, error, isLoading, mutate } = useSWR<User>("/api/me", fetcher, {
+  const { data, error, isLoading, isValidating, mutate } = useSWR<User>("/api/me", fetcher, {
     shouldRetryOnError: false,
     revalidateOnFocus: false,
   });
-  return { user: data, unauthorized: !!error, loading: isLoading, mutate };
+  return { user: data, unauthorized: !!error && !data && !isValidating, loading: isLoading, mutate };
 }
 
 export const canWrite = (u?: User) => u?.role === "admin" || u?.role === "operator";

@@ -136,6 +136,7 @@ export function Sidebar({ user }: { user: User }) {
 
   async function logout() {
     await api("/auth/logout", { method: "POST" });
+    await globalMutate("/api/me", undefined, { revalidate: false });
     router.replace("/login");
   }
 

@@ -2,8 +2,10 @@
 import { QRCodeSVG } from "qrcode.react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { mutate as globalMutate } from "swr";
 import { Button, ErrorNote, Field, Input } from "@/components/ui";
 import { api } from "@/lib/api";
+import type { User } from "@/lib/types";
 
 type Step = "password" | "totp_setup" | "totp_required";
 
@@ -33,7 +35,8 @@ export default function LoginPage() {
   });
 
   const submitCode = () => run(async () => {
-    await api("/auth/2fa/verify", { body: { pre_token: pre, code } });
+    const user = await api<User>("/auth/2fa/verify", { body: { pre_token: pre, code } });
+    await globalMutate("/api/me", user, { revalidate: false });
     router.replace("/dashboard");
   });
 
