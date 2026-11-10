@@ -155,11 +155,11 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
     setUpdatingGit(true);
     setGitMsg("");
     try {
-      const res = await api<{ commit: string; git_output: string }>("/system/github-update", {
+      const res = await api<{ commit: string; git_output: string; rebuilding?: boolean }>("/system/github-update", {
         method: "POST",
         body: {},
       });
-      setGitMsg(`Оновлено (${res.commit})`);
+      setGitMsg(res.rebuilding ? "Збірка запущена. Оновіть сторінку за кілька хвилин." : `Оновлено (${res.commit})`);
       mutateSys();
     } catch (e) {
       setGitMsg((e as Error).message);

@@ -23,7 +23,15 @@ services:
       COOKIE_SECURE: "false"
       APP_ENV: prod
       FBRENT_BACKUP_DIR: /backups
-    volumes: ["./backups:/backups"]
+      FBRENT_GIT_DIR: /repo
+      FBRENT_HOST_DIR: /opt/fbrent
+      FBRENT_REBUILD: "1"
+    volumes:
+      - ./backups:/backups
+      - .:/repo
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/local/bin/docker:ro
+      - /usr/libexec/docker/cli-plugins:/usr/libexec/docker/cli-plugins:ro
     depends_on:
       db:
         condition: service_healthy

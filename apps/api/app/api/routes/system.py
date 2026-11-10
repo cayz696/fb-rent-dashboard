@@ -1,5 +1,6 @@
 from __future__ import annotations
 """Керування десктоп-системою та оновленням через GitHub."""
+import os
 import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,11 +18,15 @@ router = APIRouter(prefix="/api/system", tags=["system"])
 ROOT_DIR = machine_backup.ROOT_DIR
 
 
+def _git_cwd() -> str:
+    return os.environ.get("FBRENT_GIT_DIR") or str(ROOT_DIR)
+
+
 def _run_git(args: list[str], timeout: int = 20) -> tuple[int, str]:
     try:
         res = subprocess.run(
             ["git", *args],
-            cwd=str(ROOT_DIR),
+            cwd=_git_cwd(),
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -152,12 +157,50 @@ def github_update(_: User = Depends(admin_only)):
         mig_out = (res.stdout or "") + (res.stderr or "")
 
     _, new_commit = _run_git(["rev-parse", "--short", "HEAD"])
+    rebuilding = _start_prod_rebuild(out_pull)
     return {
         "ok": True,
         "commit": new_commit,
-        "git_output": out_pull or "Вже встановлено останню версію",
+        "rebuilding": rebuilding,
+        "git_output": (
+            "Збірка запущена. Оновіть сторінку за кілька хвилин."
+            if rebuilding
+            else (out_pull or "Вже встановлено останню версію")
+        ),
         "migrations_output": mig_out.strip(),
     }
+
+
+def _start_prod_rebuild(pull_output: str) -> bool:
+    """На сервері після git pull збірку запускає окремий контейнер: інакше оновлення вб'є саме себе."""
+    if os.environ.get("FBRENT_REBUILD") != "1":
+        return False
+    if "Already up to date" in pull_output:
+        return False
+    host = os.environ.get("FBRENT_HOST_DIR")
+    if not host:
+        return False
+    subprocess.run(["docker", "rm", "-f", "fbrent-update"], capture_output=True, text=True)
+    res = subprocess.run(
+        [
+            "docker", "run", "-d", "--name", "fbrent-update",
+            "-v", "/var/run/docker.sock:/var/run/docker.sock",
+            "-v", f"{host}:{host}",
+            "-v", "/usr/bin/docker:/usr/local/bin/docker:ro",
+            "-v", "/usr/libexec/docker/cli-plugins:/usr/libexec/docker/cli-plugins:ro",
+            "-w", host,
+            "--entrypoint", "/usr/local/bin/docker",
+            "python:3.12-slim",
+            "compose", "-f", "docker-compose.prod.yml", "up", "-d", "--build", "api", "web",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout or "невідома помилка").strip()
+        raise HTTPException(400, f"Код завантажено, але збірку не вдалося запустити: {detail}")
+    return True
 
 
 @router.get("/backup")
