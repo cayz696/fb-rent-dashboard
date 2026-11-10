@@ -25,7 +25,7 @@ export default function RequestsPage() {
 
   return (
     <>
-      <PageHeader title="Заявки" sub="Заявки на видачу акаунтів. Telegram-джерело підключиться пізніше — заявки створюються вручну."
+      <PageHeader title="Заявки" sub="Заявки на видачу акаунтів. Можна створити вручну або конвертувати з задачі в «Задачнику»."
         right={canWrite(user) && <Button variant="primary" onClick={() => setCreating(true)}><Plus size={15} />Нова заявка</Button>} />
       <div className="mb-4 flex gap-2">{TABS.map((t) => <Chip key={t.key} active={tab === t.key} onClick={() => setTab(t.key)}>{t.label}</Chip>)}</div>
       {data && !data.length ? <div className="panel"><Empty>Заявок немає</Empty></div> : (

@@ -35,6 +35,16 @@ import { hasSectionAccess, isAdmin } from "@/lib/session";
 import type { BridgeStatus, Dashboard, FbmCards, SystemStatus, TasksOverview, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+function autofixGateway(sys?: SystemStatus): [string, string, string] {
+  const raw = sys?.last_spend_snapshot;
+  if (!raw) return ["Автофіксація (3–4г)", "немає знімка", "var(--text-faint)"];
+  const t = Date.parse(raw);
+  if (!Number.isFinite(t)) return ["Автофіксація (3–4г)", "немає знімка", "var(--text-faint)"];
+  const hours = (Date.now() - t) / 3_600_000;
+  if (hours <= 8) return ["Автофіксація (3–4г)", "активна", "var(--success)"];
+  return ["Автофіксація (3–4г)", `застаріла ${Math.round(hours)}г`, "var(--warning)"];
+}
+
 export function Sidebar({ user }: { user: User }) {
   const path = usePathname();
   const router = useRouter();
@@ -76,7 +86,7 @@ export function Sidebar({ user }: { user: User }) {
       "Telegram + ШІ",
       tasksOv?.telegram_state?.status === "connected"
         ? "ТГ підключено"
-        : `${tasksOv?.groups?.filter((g) => g.is_monitored).length ?? 3} груп (ШІ)`,
+        : `${tasksOv?.groups?.filter((g) => g.is_monitored).length ?? 0} груп (ШІ)`,
       tasksOv?.telegram_state?.status === "connected" ? "var(--success)" : "var(--accent)",
     ],
     [
@@ -84,7 +94,7 @@ export function Sidebar({ user }: { user: User }) {
       !bridge?.last_seen ? "не підключено" : bridge.online ? "онлайн" : "офлайн",
       !bridge?.last_seen ? "var(--text-faint)" : bridge.online ? "var(--success)" : "var(--danger)",
     ],
-    ["Автофіксація (3–4г)", "активна", "var(--success)"],
+    autofixGateway(sys),
   ];
 
   const openTasksCount = tasksOv ? tasksOv.stats.inbox + tasksOv.stats.todo + tasksOv.stats.in_progress : undefined;

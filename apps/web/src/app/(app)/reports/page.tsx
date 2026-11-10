@@ -13,7 +13,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { Button, Card, CardHeader, Empty, ErrorNote, Field, Input, Modal, PageHeader, Select } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
-import { canWrite, useMe } from "@/lib/session";
+import { canWrite, hasSectionAccess, useMe } from "@/lib/session";
 import type { ExpenseCategoryItem, ReportSummary } from "@/lib/types";
 import { money } from "@/lib/utils";
 
@@ -33,8 +33,13 @@ export default function ReportsPage() {
   const [addingCategory, setAddingCategory] = useState(false);
   const [error, setError] = useState("");
 
+  const allowed = hasSectionAccess(user, "reports");
   const url = `/api/reports/summary?date_from=${dateFrom}&date_to=${dateTo}&fee_percent=${encodeURIComponent(feePercent || "0")}&include_batches_cost=${includeBatches}`;
-  const { data, mutate } = useSWR<ReportSummary>(url, fetcher, { keepPreviousData: true });
+  const { data, mutate } = useSWR<ReportSummary>(allowed ? url : null, fetcher, { keepPreviousData: true });
+
+  if (user && !allowed) {
+    return <><PageHeader title="Звітність та Точка прибутку" /><div className="panel"><Empty>Немає доступу до цього розділу.</Empty></div></>;
+  }
 
   async function removeExpense(id: string) {
     if (!confirm("Видалити цей запис витрати?")) return;
@@ -72,6 +77,11 @@ export default function ReportsPage() {
       />
 
       <ErrorNote>{error}</ErrorNote>
+      {data && Number(data.total_spend) === 0 && (
+        <p className="mb-5 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-[13px] text-warning">
+          Немає поденних фіксацій спенду за цей період. Точка прибутку рахується без lifetime зі знімка FBM.
+        </p>
+      )}
 
       {/* Панель фільтрів періоду та формули відсотка */}
       <Card className="mb-5 p-4">

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import actor_of, admin_only, current_user
+from app.api.deps import actor_of, admin_only, current_user, has_section
 from app.core.db import get_db
 from app.models import Account, Batch, Client, Role, Stage, Supplier, User
 from app.schemas.api import BatchIn, BatchOut, ClientIn, ClientOut, SupplierIn, SupplierOut
@@ -86,40 +86,41 @@ def create_batch(body: BatchIn, db: Session = Depends(get_db), user: User = Depe
 
 
 # ---- clients
-def _client_out(db: Session, c: Client) -> ClientOut:
+def _client_out(db: Session, c: Client, user: User) -> ClientOut:
     out = ClientOut.model_validate(c)
     out.accounts_issued = db.scalar(
         select(func.count()).select_from(Account).where(Account.client_id == c.id, Account.stage == Stage.issued)
     ) or 0
-    out.current_balance = fin_svc.client_report(db, c)["balance"]
+    if user.role == Role.admin and has_section(user, "finance"):
+        out.current_balance = fin_svc.client_report(db, c)["balance"]
     return out
 
 
 @router.get("/clients", response_model=list[ClientOut])
-def list_clients(db: Session = Depends(get_db), _: User = Depends(current_user)):
-    return [_client_out(db, c) for c in db.scalars(select(Client).order_by(Client.name))]
+def list_clients(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return [_client_out(db, c, user) for c in db.scalars(select(Client).order_by(Client.name))]
 
 
 @router.get("/clients/{cid}", response_model=ClientOut)
-def get_client(cid: uuid.UUID, db: Session = Depends(get_db), _: User = Depends(current_user)):
-    return _client_out(db, db.get(Client, cid) or _404())
+def get_client(cid: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return _client_out(db, db.get(Client, cid) or _404(), user)
 
 
 @router.post("/clients", response_model=ClientOut, status_code=201)
-def create_client(body: ClientIn, db: Session = Depends(get_db), _: User = Depends(admin_only)):
+def create_client(body: ClientIn, db: Session = Depends(get_db), user: User = Depends(admin_only)):
     c = Client(**body.model_dump())
     db.add(c)
     db.commit()
-    return _client_out(db, c)
+    return _client_out(db, c, user)
 
 
 @router.put("/clients/{cid}", response_model=ClientOut)
-def update_client(cid: uuid.UUID, body: ClientIn, db: Session = Depends(get_db), _: User = Depends(admin_only)):
+def update_client(cid: uuid.UUID, body: ClientIn, db: Session = Depends(get_db), user: User = Depends(admin_only)):
     c = db.get(Client, cid) or _404()
     for k, v in body.model_dump().items():
         setattr(c, k, v)
     db.commit()
-    return _client_out(db, c)
+    return _client_out(db, c, user)
 
 
 @router.delete("/clients/{cid}", status_code=204)

@@ -1,9 +1,12 @@
 from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
+import logging
 import os
 import time
 from collections import defaultdict, deque
+
+log = logging.getLogger("fbrent")
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -36,27 +39,23 @@ async def _periodic_fbm_and_sheets_loop():
                         elif t.sheet_url:
                             buyers_sync.fetch_and_sync_team_sheet(db, t)
                     except Exception:
-                        pass
+                        log.exception("team sheet sync failed for %s", t.name)
 
                 # 3. Добова звірка раз на 24 години
                 if ticks % 7 == 0:
                     buyers_sync.reconcile_fbm_spend(db, fetch_live=True)
         except Exception:
-            pass
+            log.exception("periodic FBM/sheets tick failed")
 
 
 async def _periodic_telegram_tasks_loop():
-    """Фоновий цикл: кожні 60 секунд перевіряє нові повідомлення в підключених Telegram-групах
-    та автоматично перетворює їх на задачі через ШІ-аналізатор контексту."""
-    while True:
-        await asyncio.sleep(60)
-        try:
-            with SessionLocal() as db:
-                st = telegram_tasks.get_telegram_state(db)
-                if st.get("status") == "connected":
-                    await telegram_tasks.sync_messages_from_telegram(db, per_group_limit=20)
-        except Exception:
-            pass
+    """Живе підключення до Telegram: нові повідомлення з моніторених чатів пишуться одразу, без хвилинного опитування."""
+    try:
+        await telegram_tasks.run_live_listener()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("telegram live listener crashed")
 
 
 @asynccontextmanager

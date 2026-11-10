@@ -38,7 +38,8 @@ def _clean():
         c.execute(text(
             "TRUNCATE account_events, requests, spend_snapshots, accounts, batches, suppliers, clients, users, "
             "bridge_commands, system_state, client_payments, teams, buyers, card_spend_logs, "
-            "buyer_daily_spends, fbm_reconciliations, expense_categories, expenses RESTART IDENTITY CASCADE"
+            "buyer_daily_spends, fbm_reconciliations, expense_categories, expenses, "
+            "telegram_message_logs, team_tasks, telegram_groups RESTART IDENTITY CASCADE"
         ))
         c.execute(text("ALTER SEQUENCE account_code_seq RESTART WITH 1"))
 
@@ -80,3 +81,9 @@ def admin():
 def operator():
     make_user("op", Role.operator)
     return login("op")
+
+
+@pytest.fixture
+def viewer():
+    make_user("view", Role.viewer)
+    return login("view")

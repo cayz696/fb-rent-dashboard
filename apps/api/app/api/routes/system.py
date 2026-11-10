@@ -4,12 +4,14 @@ from pathlib import Path
 import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import admin_only, current_user
 from app.core.db import get_db
-from app.models import SystemState, User
+from app.models import Role, SystemState, User
+from app.services import machine_backup
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -50,7 +52,7 @@ class RemoteIn(BaseModel):
 def system_status(
     check_remote: bool = False,
     db: Session = Depends(get_db),
-    _: User = Depends(current_user),
+    user: User = Depends(current_user),
 ):
     code_git, _ = _run_git(["rev-parse", "--is-inside-work-tree"])
     git_initialized = code_git == 0
@@ -84,12 +86,13 @@ def system_status(
         "git_initialized": git_initialized,
         "commit": commit,
         "branch": branch,
-        "remote_url": remote_url,
+        "remote_url": remote_url if user.role == Role.admin else "",
         "last_commit_msg": last_commit_msg,
         "behind_count": behind_count,
         "auto_sync_interval_hours": 3.5,
         "reconcile_interval_hours": 24,
         "last_spend_snapshot": st_tr.value.get("last_recorded_at") if st_tr and st_tr.value else None,
+        "backup": machine_backup.backup_status() if user.role == Role.admin else None,
     }
 
 
@@ -156,3 +159,24 @@ def github_update(_: User = Depends(admin_only)):
         "git_output": out_pull or "Вже встановлено останню версію",
         "migrations_output": mig_out.strip(),
     }
+
+
+@router.get("/backup")
+def backup_info(_: User = Depends(admin_only)):
+    return machine_backup.backup_status()
+
+
+@router.post("/backup")
+def create_backup(_: User = Depends(admin_only)):
+    try:
+        return machine_backup.create_backup()
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.get("/backup/download")
+def download_backup(_: User = Depends(admin_only)):
+    path = machine_backup.latest_dump()
+    if not path.exists():
+        raise HTTPException(404, "Спочатку зробіть бекап")
+    return FileResponse(path, filename=path.name, media_type="application/octet-stream")

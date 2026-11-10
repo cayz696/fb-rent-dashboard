@@ -41,6 +41,20 @@ def seed_demo(_):
     print("Демо-дані створено")
 
 
+def backup(_):
+    from app.services.machine_backup import create_backup
+    res = create_backup()
+    print("Бекап збережено:", res)
+
+
+def restore(args):
+    from pathlib import Path
+    from app.services.machine_backup import restore_backup
+    path = Path(args.file) if args.file else None
+    res = restore_backup(path, only_if_empty=args.if_empty)
+    print("Відновлення:", res)
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(required=True)
@@ -49,6 +63,11 @@ def main():
     c.add_argument("--password")
     c.set_defaults(fn=create_user)
     sub.add_parser("seed-demo").set_defaults(fn=seed_demo)
+    sub.add_parser("backup").set_defaults(fn=backup)
+    r = sub.add_parser("restore")
+    r.add_argument("--file", help="Шлях до .dump (за замовч. backups/latest.dump)")
+    r.add_argument("--if-empty", action="store_true", help="Не чіпати БД, якщо в ній уже є дані")
+    r.set_defaults(fn=restore)
     a = p.parse_args()
     a.fn(a)
 

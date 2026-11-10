@@ -1,12 +1,12 @@
 "use client";
-import { Check, GitBranch, Laptop, Plus, RefreshCw, Shield } from "lucide-react";
+import { Check, Download, GitBranch, HardDrive, Laptop, Plus, RefreshCw, Shield } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
 import { Button, Card, CardHeader, Empty, ErrorNote, Field, Input, Modal, PageHeader, Select } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
-import { ALL_SECTIONS, isAdmin, useMe } from "@/lib/session";
+import { ALL_SECTIONS, hasSectionAccess, isAdmin, useMe } from "@/lib/session";
 import { CMD_LABEL, CMD_STATUS } from "@/components/accounts/adspower";
-import type { Account, BridgeCommand, BridgeStatus, AccountList, CloverStatus, Role, SystemStatus, Unmatched, UserAdmin } from "@/lib/types";
+import type { Account, BridgeCommand, BridgeStatus, AccountList, CloverStatus, Role, SystemBackupStatus, SystemStatus, Unmatched, UserAdmin } from "@/lib/types";
 import { fmtDateTime, money } from "@/lib/utils";
 
 const th = "px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-faint";
@@ -14,21 +14,29 @@ const ROLES: Record<Role, string> = { admin: "Адмін", operator: "Опера
 
 export default function SettingsPage() {
   const { user } = useMe();
-  if (!isAdmin(user)) return <><PageHeader title="Налаштування" /><div className="panel"><Empty>Розділ доступний лише адміну.</Empty></div></>;
+  if (!isAdmin(user) || !hasSectionAccess(user, "settings")) {
+    return <><PageHeader title="Налаштування" /><div className="panel"><Empty>Немає доступу до цього розділу.</Empty></div></>;
+  }
   return (
     <>
       <PageHeader title="Налаштування" />
       <div className="space-y-5">
         <Users meId={user!.id} />
+        <MachineBackupCard />
         <DesktopGithubCard />
         <Clover />
         <Bridge />
         <Card>
-          <CardHeader title="Інтеграції, що підключаються пізніше" />
+          <CardHeader title="Інтеграції" />
           <ul className="divide-y divide-divider text-[13px]">
-            {[["Telegram", "Останній етап: userbot для читання чатів + бот адміна"], ["ШІ-агент", "MVP-5: чат і інструменти"]].map(([n, t]) => (
-              <li key={n} className="flex justify-between px-5 py-3.5"><span className="font-medium">{n}</span><span className="text-muted">{t}</span></li>
-            ))}
+            <li className="flex justify-between px-5 py-3.5">
+              <span className="font-medium">Telegram + ШІ-задачник</span>
+              <span className="text-muted">Працює в розділі «Задачник»: userbot, групи, автозадачі</span>
+            </li>
+            <li className="flex justify-between px-5 py-3.5">
+              <span className="font-medium">Бот адміна в Telegram</span>
+              <span className="text-muted">Окремий бот карток — ще не підключений</span>
+            </li>
           </ul>
         </Card>
       </div>
@@ -102,7 +110,7 @@ function Users({ meId }: { meId: string }) {
 function CreateUser({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState({ username: "", name: "", role: "operator" as Role, password: "" });
   const [limitSections, setLimitSections] = useState(false);
-  const [selected, setSelected] = useState<string[]>(["overview", "buyers", "cards"]);
+  const [selected, setSelected] = useState<string[]>(["dashboard", "buyers", "cards"]);
   const [error, setError] = useState("");
 
   function toggleSection(key: string) {
@@ -156,7 +164,7 @@ function CreateUser({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 
 function EditSectionsModal({ u, onClose, onDone }: { u: UserAdmin; onClose: () => void; onDone: () => void }) {
   const [limitSections, setLimitSections] = useState<boolean>(Array.isArray(u.allowed_sections) && u.allowed_sections.length > 0);
-  const [selected, setSelected] = useState<string[]>(u.allowed_sections ?? ["overview", "buyers", "cards"]);
+  const [selected, setSelected] = useState<string[]>(u.allowed_sections ?? ["dashboard", "buyers", "cards"]);
   const [error, setError] = useState("");
 
   function toggleSection(key: string) {
@@ -199,6 +207,81 @@ function EditSectionsModal({ u, onClose, onDone }: { u: UserAdmin; onClose: () =
         <Button variant="primary" onClick={save} disabled={limitSections && selected.length === 0}><Check size={14} />Зберегти права</Button>
       </div>
     </Modal>
+  );
+}
+
+function MachineBackupCard() {
+  const { data: st, mutate } = useSWR<SystemStatus>("/api/system/status", fetcher);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+  const b: SystemBackupStatus | null | undefined = st?.backup;
+
+  async function makeBackup() {
+    setBusy(true); setError(""); setMsg("");
+    try {
+      const res = await api<{ dump_file?: string; dump_size_bytes?: number; counts?: SystemBackupStatus["live_counts"] }>("/system/backup", { method: "POST", body: {} });
+      const mb = res.dump_size_bytes ? (res.dump_size_bytes / (1024 * 1024)).toFixed(1) : "?";
+      setMsg(`Збережено ${res.dump_file || "latest.dump"} (${mb} МБ). Акаунтів: ${res.counts?.accounts ?? "—"}.`);
+      mutate();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const sizeMb = b?.dump_size_bytes ? (b.dump_size_bytes / (1024 * 1024)).toFixed(1) : null;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Перенесення на інший ноут (повна копія даних)"
+        right={
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={makeBackup} disabled={busy}>
+              <HardDrive size={13} />Зберегти копію БД
+            </Button>
+            {b?.has_dump && (
+              <a href="/api/system/backup/download" className="inline-flex h-8 items-center gap-1 rounded-md border border-line-strong bg-surface-hover px-3 text-[12px] font-medium text-main hover:border-accent">
+                <Download size={13} />Завантажити .dump
+              </a>
+            )}
+          </div>
+        }
+      />
+      <div className="space-y-3 p-5 text-[13px]">
+        <p className="text-muted">
+          Дані живуть у Postgres (Docker-том), не в папці проєкту. Перед переїздом зробіть копію тут — на новому Mac вона підніметься автоматично.
+        </p>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 font-mono text-[12px]">
+          <div className="rounded-lg border border-line bg-inset px-3 py-2">
+            <div className="text-[10px] uppercase text-faint">Останній бекап</div>
+            <div className="mt-1">{b?.created_at ? fmtDateTime(b.created_at) : "ще немає"}</div>
+          </div>
+          <div className="rounded-lg border border-line bg-inset px-3 py-2">
+            <div className="text-[10px] uppercase text-faint">Файл</div>
+            <div className="mt-1 truncate">{b?.dump_file || "—"}{sizeMb ? ` · ${sizeMb} МБ` : ""}</div>
+          </div>
+          <div className="rounded-lg border border-line bg-inset px-3 py-2">
+            <div className="text-[10px] uppercase text-faint">Зараз у БД</div>
+            <div className="mt-1">{b?.live_counts ? `${b.live_counts.accounts} ак. · ${b.live_counts.buyers} юзерів` : "—"}</div>
+          </div>
+          <div className="rounded-lg border border-line bg-inset px-3 py-2">
+            <div className="text-[10px] uppercase text-faint">Ключі .env</div>
+            <div className="mt-1">{b?.has_env_transfer ? "скопійовано в backups/" : "зробіть бекап"}</div>
+          </div>
+        </div>
+        <ol className="list-decimal space-y-1 pl-5 text-[12.5px] text-muted">
+          <li>Натисніть «Зберегти копію БД» (або в терміналі <code className="font-mono text-main">./desktop/pack.sh</code> — збере архів на Робочий стіл).</li>
+          <li>На новий Mac скопіюйте репозиторій + <code className="font-mono text-main">backups/latest.dump</code> + <code className="font-mono text-main">backups/env.transfer</code>.</li>
+          <li>Покладіть <code className="font-mono text-main">env.transfer</code> як <code className="font-mono text-main">.env</code> у корінь і запустіть <code className="font-mono text-main">./setup_mac.sh</code>.</li>
+          <li>Відкрийте FB Rent — акаунти, картки, задачі й логіни будуть ті самі.</li>
+        </ol>
+        {msg && <div className="rounded-md bg-success/10 px-3 py-2 font-mono text-[12px] text-success">{msg}</div>}
+        <ErrorNote>{error}</ErrorNote>
+      </div>
+    </Card>
   );
 }
 

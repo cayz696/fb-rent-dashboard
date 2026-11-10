@@ -47,3 +47,16 @@ export function hasSectionAccess(u: User | undefined, sectionKey: string): boole
   }
   return true;
 }
+
+export function sectionKeyFromPath(path: string): string | null {
+  const match = [...ALL_SECTIONS]
+    .slice()
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((s) => path === s.href || path.startsWith(`${s.href}/`));
+  return match?.key ?? null;
+}
+
+export function firstAllowedHref(u: User): string {
+  const hit = ALL_SECTIONS.find((s) => hasSectionAccess(u, s.key));
+  return hit?.href ?? "/dashboard";
+}

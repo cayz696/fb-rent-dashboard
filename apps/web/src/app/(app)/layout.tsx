@@ -1,13 +1,21 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
-import { useMe } from "@/lib/session";
+import { firstAllowedHref, hasSectionAccess, sectionKeyFromPath, useMe } from "@/lib/session";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, unauthorized } = useMe();
   const router = useRouter();
+  const path = usePathname();
   useEffect(() => { if (unauthorized) router.replace("/login"); }, [unauthorized, router]);
+  useEffect(() => {
+    if (!user) return;
+    const section = sectionKeyFromPath(path);
+    if (section && !hasSectionAccess(user, section)) {
+      router.replace(firstAllowedHref(user));
+    }
+  }, [user, path, router]);
   useEffect(() => {
     const saved = user?.theme || (typeof window !== "undefined" ? localStorage.getItem("sp_theme") : null) || "dark";
     const resolved = saved === "light" ? "light" : "dark";

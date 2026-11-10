@@ -28,5 +28,14 @@ cd ../web && npm install && npm run dev                          # http://localh
 ```
 Тести API: `cd apps/api && .venv/bin/python -m pytest` (створює окрему БД `fbrent_test`).
 
+## Інший ноут (зберегти всі дані)
+Дані в Docker-томі Postgres, не в git. Інструкція: [docs/TRANSFER.md](docs/TRANSFER.md).
+
+```bash
+./desktop/pack.sh          # на старому Mac → zip на Робочому столі
+./setup_mac.sh             # на новому Mac після копіювання dump + .env
+./desktop/backup.sh        # ручний бекап у backups/latest.dump
+```
+
 ## Статус
 Див. [docs/WORKLOG.md](docs/WORKLOG.md).

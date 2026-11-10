@@ -162,6 +162,7 @@ export default function TasksPage() {
   const [addingGroup, setAddingGroup] = useState(false);
   const [threadForTask, setThreadForTask] = useState<TelegramConversationThread | null>(null);
   const [showAllThreads, setShowAllThreads] = useState(false);
+  const [promoteError, setPromoteError] = useState("");
 
   const queryParams = new URLSearchParams();
   if (filterCat) queryParams.set("category", filterCat);
@@ -170,10 +171,10 @@ export default function TasksPage() {
   if (filterAssignee) queryParams.set("assignee_id", filterAssignee);
   if (searchQ.trim()) queryParams.set("q", searchQ.trim());
 
-  const { data, mutate } = useSWR<TasksOverview>(
+  const { data, error, mutate } = useSWR<TasksOverview>(
     `/api/tasks/overview${queryParams.toString() ? `?${queryParams.toString()}` : ""}`,
     fetcher,
-    { refreshInterval: 15000 },
+    { refreshInterval: 1000, dedupingInterval: 500 },
   );
 
   // Стан для ШІ-симулятора повідомлень із Telegram
@@ -256,8 +257,13 @@ export default function TasksPage() {
   }
 
   async function promoteLogToTask(logId: number) {
-    await api(`/tasks/messages/${logId}/create-task`, { method: "POST", body: {} });
-    mutate();
+    setPromoteError("");
+    try {
+      await api(`/tasks/messages/${logId}/create-task`, { method: "POST", body: {} });
+      mutate();
+    } catch (e) {
+      setPromoteError((e as Error).message || "Не вдалося створити задачу");
+    }
   }
 
   async function handleSendTgCode() {
@@ -343,16 +349,26 @@ export default function TasksPage() {
   }
 
   async function toggleGroupFlag(g: TelegramGroupItem, field: "is_monitored" | "auto_create_tasks") {
-    await api(`/tasks/groups/${g.id}`, {
-      method: "PATCH",
-      body: { [field]: !g[field] },
-    });
-    mutate();
+    if (!editable) return;
+    try {
+      await api(`/tasks/groups/${g.id}`, {
+        method: "PATCH",
+        body: { [field]: !g[field] },
+      });
+      mutate();
+    } catch (e) {
+      setTgError((e as Error).message);
+    }
   }
 
   async function updateGroupBinding(g: TelegramGroupItem, payload: Record<string, unknown>) {
-    await api(`/tasks/groups/${g.id}`, { method: "PATCH", body: payload });
-    mutate();
+    if (!editable) return;
+    try {
+      await api(`/tasks/groups/${g.id}`, { method: "PATCH", body: payload });
+      mutate();
+    } catch (e) {
+      setTgError((e as Error).message);
+    }
   }
 
   async function handleDeleteGroup(g: TelegramGroupItem) {
@@ -364,21 +380,25 @@ export default function TasksPage() {
   }
 
   async function saveAiSettings() {
-    if (!data) return;
+    if (!data || !editable) return;
     setAiSavedMsg("");
-    await api("/tasks/ai-config", {
-      method: "PUT",
-      body: {
-        provider: aiProvider || data.ai_config.provider,
-        model: aiModel || data.ai_config.model,
-        api_key: aiApiKey ? aiApiKey : undefined,
-        confidence_threshold: aiThreshold || data.ai_config.confidence_threshold,
-        system_prompt: aiPrompt || data.ai_config.system_prompt,
-      },
-    });
-    setAiApiKey("");
-    setAiSavedMsg("Налаштування ШІ збережено");
-    mutate();
+    try {
+      await api("/tasks/ai-config", {
+        method: "PUT",
+        body: {
+          provider: aiProvider || data.ai_config.provider,
+          model: aiModel || data.ai_config.model,
+          api_key: aiApiKey ? aiApiKey : undefined,
+          confidence_threshold: aiThreshold || data.ai_config.confidence_threshold,
+          system_prompt: aiPrompt || data.ai_config.system_prompt,
+        },
+      });
+      setAiApiKey("");
+      setAiSavedMsg("Налаштування ШІ збережено");
+      mutate();
+    } catch (e) {
+      setTgError((e as Error).message);
+    }
   }
 
   const stats = data?.stats;
@@ -386,6 +406,7 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-6">
+      {error && <ErrorNote>Не вдалося завантажити задачник: {(error as Error).message}</ErrorNote>}
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -401,7 +422,7 @@ export default function TasksPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {tgState?.status === "connected" && (
+          {tgState?.status === "connected" && editable && (
             <Button variant="ghost" onClick={handleSyncTgNow} disabled={tgBusy}>
               <RefreshCw size={14} className={tgBusy ? "animate-spin" : ""} />
               Синхронізувати ТГ
@@ -1208,10 +1229,11 @@ export default function TasksPage() {
                 icon={<MessageSquare size={17} className="text-sky-400" />}
                 right={
                   <span className="font-mono text-[12px] text-muted">
-                    Останні {data?.recent_messages.length ?? 0} повідомлень
+                    Одразу з підключених чатів · {data?.recent_messages.length ?? 0}
                   </span>
                 }
               />
+              {promoteError && <div className="px-5 pt-3"><ErrorNote>{promoteError}</ErrorNote></div>}
               <div className="divide-y divide-divider">
                 {!data?.recent_messages.length ? (
                   <Empty>Повідомлень із груп поки немає</Empty>
@@ -1354,16 +1376,16 @@ export default function TasksPage() {
                         </div>
                         <div className="font-mono text-[12px] text-muted">Телефон: {tgState.phone}</div>
                       </div>
-                      <Button size="sm" variant="danger" onClick={handleDisconnectTg} disabled={tgBusy}>
+                      <Button size="sm" variant="danger" onClick={handleDisconnectTg} disabled={!editable || tgBusy}>
                         Відключити
                       </Button>
                     </div>
 
                     <div className="flex flex-wrap gap-2 pt-2">
-                      <Button size="sm" variant="primary" onClick={handleLoadDialogs} disabled={tgBusy}>
+                      <Button size="sm" variant="primary" onClick={handleLoadDialogs} disabled={!editable || tgBusy}>
                         Завантажити мої групи з ТГ
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={handleSyncTgNow} disabled={tgBusy}>
+                      <Button size="sm" variant="ghost" onClick={handleSyncTgNow} disabled={!editable || tgBusy}>
                         <RefreshCw size={13} className={tgBusy ? "animate-spin" : ""} />
                         Зчитати нові повідомлення
                       </Button>
@@ -1451,6 +1473,7 @@ export default function TasksPage() {
                           value={tgApiId}
                           onChange={(e) => setTgApiId(e.target.value)}
                           placeholder={String(tgState?.api_id || "20401928")}
+                          disabled={!editable}
                         />
                       </Field>
                       <Field label="Telegram API Hash">
@@ -1459,6 +1482,7 @@ export default function TasksPage() {
                           value={tgApiHash}
                           onChange={(e) => setTgApiHash(e.target.value)}
                           placeholder={tgState?.api_hash_masked || "a1b2c3d4e5..."}
+                          disabled={!editable}
                         />
                       </Field>
                     </div>
@@ -1468,13 +1492,14 @@ export default function TasksPage() {
                         value={tgPhone}
                         onChange={(e) => setTgPhone(e.target.value)}
                         placeholder={tgState?.phone || "+380..."}
+                        disabled={!editable}
                       />
                     </Field>
 
                     <Button
                       variant="primary"
                       onClick={handleSendTgCode}
-                      disabled={tgBusy || !tgApiId || !tgApiHash || !tgPhone}
+                      disabled={!editable || tgBusy || !tgApiId || !tgApiHash || !tgPhone}
                       className="w-full"
                     >
                       Надіслати код у Telegram
@@ -1505,7 +1530,7 @@ export default function TasksPage() {
                         <Button
                           variant="primary"
                           onClick={handleVerifyTgCode}
-                          disabled={tgBusy || !tgCode.trim()}
+                          disabled={!editable || tgBusy || !tgCode.trim()}
                           className="w-full"
                         >
                           Підтвердити та запустити парсер
@@ -1529,6 +1554,7 @@ export default function TasksPage() {
                     <Select
                       value={aiProvider || data?.ai_config.provider || "hybrid"}
                       onChange={(e) => setAiProvider(e.target.value)}
+                      disabled={!editable}
                     >
                       <option value="hybrid">Гібридний (LLM + Доменний NLP)</option>
                       <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
@@ -1542,6 +1568,7 @@ export default function TasksPage() {
                       value={aiModel || data?.ai_config.model || "gpt-4o-mini"}
                       onChange={(e) => setAiModel(e.target.value)}
                       placeholder="gpt-4o-mini або gemini-2.0-flash"
+                      disabled={!editable}
                     />
                   </Field>
                 </div>
@@ -1560,6 +1587,7 @@ export default function TasksPage() {
                       value={aiApiKey}
                       onChange={(e) => setAiApiKey(e.target.value)}
                       placeholder={data?.ai_config.api_key_masked || "sk-... або AIza..."}
+                      disabled={!editable}
                     />
                   </Field>
 
@@ -1570,6 +1598,7 @@ export default function TasksPage() {
                       max={95}
                       value={aiThreshold || data?.ai_config.confidence_threshold || 60}
                       onChange={(e) => setAiThreshold(Number(e.target.value))}
+                      disabled={!editable}
                     />
                   </Field>
                 </div>
@@ -1579,12 +1608,13 @@ export default function TasksPage() {
                     rows={5}
                     value={aiPrompt || data?.ai_config.system_prompt || ""}
                     onChange={(e) => setAiPrompt(e.target.value)}
+                    disabled={!editable}
                   />
                 </Field>
 
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] text-emerald-400">{aiSavedMsg}</span>
-                  <Button variant="primary" onClick={saveAiSettings}>
+                  <Button variant="primary" onClick={saveAiSettings} disabled={!editable}>
                     Зберегти налаштування ШІ
                   </Button>
                 </div>
@@ -1634,8 +1664,10 @@ export default function TasksPage() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => toggleGroupFlag(g, "is_monitored")}
+                            disabled={!editable}
                             className={cn(
-                              "cursor-pointer rounded-md border px-2.5 py-1 text-[11.5px] font-semibold transition",
+                              "rounded-md border px-2.5 py-1 text-[11.5px] font-semibold transition",
+                              editable ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                               g.is_monitored
                                 ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
                                 : "border-line-strong bg-surface-hover text-muted",
@@ -1646,8 +1678,10 @@ export default function TasksPage() {
 
                           <button
                             onClick={() => toggleGroupFlag(g, "auto_create_tasks")}
+                            disabled={!editable}
                             className={cn(
-                              "cursor-pointer rounded-md border px-2.5 py-1 text-[11.5px] font-medium transition",
+                              "rounded-md border px-2.5 py-1 text-[11.5px] font-medium transition",
+                              editable ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                               g.auto_create_tasks
                                 ? "border-purple-500/40 bg-purple-500/15 text-purple-300"
                                 : "border-line-strong bg-surface-hover text-muted",
@@ -1673,6 +1707,7 @@ export default function TasksPage() {
                         <Field label="Прив'язка до Команди баєрів">
                           <Select
                             value={g.team_id || ""}
+                            disabled={!editable}
                             onChange={(e) => updateGroupBinding(g, { team_id: e.target.value || null })}
                           >
                             <option value="">Без прив'язки до команди</option>
@@ -1687,6 +1722,7 @@ export default function TasksPage() {
                         <Field label="Відповідальний виконавець за замовчуванням">
                           <Select
                             value={g.default_assignee_id || ""}
+                            disabled={!editable}
                             onChange={(e) => updateGroupBinding(g, { default_assignee_id: e.target.value || null })}
                           >
                             <option value="">Авто / Без призначення</option>

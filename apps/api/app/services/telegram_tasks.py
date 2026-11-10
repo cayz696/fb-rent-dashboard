@@ -1,13 +1,24 @@
 from __future__ import annotations
 """Сервіс інтеграції з особистим Telegram-акаунтом (Telethon MTProto Userbot)
 та обробки повідомлень із робочих груп у Задачник Команди."""
+import asyncio
 import datetime as dt
+import logging
+import threading
+import time
 import uuid
 from typing import Any, Dict, List, Optional
+
+log = logging.getLogger("fbrent.telegram")
+_ingest_lock = threading.Lock()
+_live_client = None
+_monitored_ids: set[int] = set()
+_monitored_loaded_at = 0.0
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.db import SessionLocal
 from app.models import Buyer, Client, Request, RequestStatus, SystemState, Team, TeamTask, TelegramGroup, TelegramMessageLog, User
 from app.services import task_ai_parser
 
@@ -180,35 +191,125 @@ async def fetch_telegram_dialogs(db: Session, limit: int = 60) -> List[Dict[str,
         await client.disconnect()
 
 
-async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25) -> Dict[str, Any]:
-    """Зчитує останні повідомлення з усіх активних груп у Telegram та пропускає їх через ШІ-парсер."""
+def _telegram_client(raw: Dict[str, Any]):
     from telethon import TelegramClient
     from telethon.sessions import StringSession
 
+    return TelegramClient(
+        StringSession(raw["session_string"]),
+        int(raw["api_id"]),
+        str(raw["api_hash"]),
+        connection_retries=3,
+        retry_delay=1,
+        timeout=10,
+        auto_reconnect=True,
+    )
+
+
+def refresh_monitored_chat_ids(force: bool = False) -> set[int]:
+    """Кеш chat_id груп, у яких увімкнено моніторинг. Оновлюється раз на кілька секунд."""
+    global _monitored_ids, _monitored_loaded_at
+    now = time.monotonic()
+    if not force and _monitored_ids and now - _monitored_loaded_at < 3:
+        return set(_monitored_ids)
+    with SessionLocal() as db:
+        ids = db.scalars(select(TelegramGroup.chat_id).where(TelegramGroup.is_monitored.is_(True))).all()
+    _monitored_ids = {int(i) for i in ids}
+    _monitored_loaded_at = now
+    return set(_monitored_ids)
+
+
+def monitored_group(db: Session, chat_id: int) -> Optional[TelegramGroup]:
+    return db.scalar(
+        select(TelegramGroup).where(
+            TelegramGroup.chat_id == int(chat_id),
+            TelegramGroup.is_monitored.is_(True),
+        )
+    )
+
+
+def _sender_fields(sender) -> tuple[Optional[str], Optional[str]]:
+    if not sender:
+        return None, None
+    username = getattr(sender, "username", None)
+    name = " ".join(filter(None, [getattr(sender, "first_name", None), getattr(sender, "last_name", None)])) or None
+    return username, name
+
+
+def _reply_id(message) -> Optional[int]:
+    reply_obj = getattr(message, "reply_to", None)
+    if not reply_obj:
+        return None
+    return getattr(reply_obj, "reply_to_top_id", None) or getattr(reply_obj, "reply_to_msg_id", None)
+
+
+def ingest_new_telegram_message(
+    chat_id: int,
+    message_id: int,
+    raw_text: str,
+    sender_username: Optional[str] = None,
+    sender_name: Optional[str] = None,
+    reply_to_msg_id: Optional[int] = None,
+    sent_at: Optional[dt.datetime] = None,
+) -> Dict[str, Any]:
+    """Пише повідомлення тільки якщо цей чат стоїть на моніторингу і його ще немає в потоці."""
+    text = (raw_text or "").strip()
+    if not text:
+        return {"skipped": True}
+    with SessionLocal() as db:
+        group = monitored_group(db, chat_id)
+        if group is None:
+            return {"skipped": True}
+        res = ingest_message(
+            db=db,
+            group=group,
+            raw_text=text,
+            sender_username=sender_username,
+            sender_name=sender_name,
+            message_id=int(message_id),
+            reply_to_msg_id=reply_to_msg_id,
+            sent_at=sent_at,
+            allow_auto_task=True,
+        )
+        if not res.get("duplicate"):
+            _save_tg_raw(db, {"last_sync_at": dt.datetime.now(dt.timezone.utc).isoformat()})
+        return res
+
+
+async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25, client=None) -> Dict[str, Any]:
+    """Догоняє останні повідомлення з моніторених груп. Живе підключення, якщо воно є, не закриває."""
     row = db.get(SystemState, TG_STATE_KEY)
     raw = dict(row.value) if row and row.value else {}
     if raw.get("status") != "connected" or not raw.get("session_string"):
         raise ValueError("Telegram-акаунт ще не підключено")
 
-    groups = db.scalars(select(TelegramGroup).where(TelegramGroup.is_monitored == True)).all()  # noqa: E712
+    groups = db.scalars(select(TelegramGroup).where(TelegramGroup.is_monitored.is_(True))).all()
+    refresh_monitored_chat_ids(force=True)
     if not groups:
         return {"groups_checked": 0, "new_messages": 0, "tasks_created": 0}
 
-    client = TelegramClient(StringSession(raw["session_string"]), int(raw["api_id"]), str(raw["api_hash"]))
-    await client.connect()
+    owns_client = client is None
+    if owns_client:
+        live = _live_client
+        if live is not None and live.is_connected():
+            client = live
+            owns_client = False
+        else:
+            client = _telegram_client(raw)
+            await client.connect()
     new_msgs = 0
     new_tasks = 0
     try:
         for g in groups:
             try:
                 msgs = await client.get_messages(int(g.chat_id), limit=per_group_limit)
+                pending = []
                 for m in reversed(list(msgs)):
                     if not m or not getattr(m, "message", None):
                         continue
                     text_val = str(m.message).strip()
                     if not text_val:
                         continue
-                    # Перевіряємо, чи вже оброблене це повідомлення
                     exists = db.scalar(
                         select(TelegramMessageLog.id).where(
                             TelegramMessageLog.chat_id == g.chat_id,
@@ -218,39 +319,124 @@ async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25) ->
                     if exists:
                         continue
                     sender = await m.get_sender()
-                    s_uname = getattr(sender, "username", None) if sender else None
-                    s_name = (
-                        " ".join(filter(None, [getattr(sender, "first_name", None), getattr(sender, "last_name", None)]))
-                        if sender
-                        else None
+                    s_uname, s_name = _sender_fields(sender)
+                    pending.append(
+                        {
+                            "chat_id": int(g.chat_id),
+                            "message_id": int(m.id),
+                            "raw_text": text_val,
+                            "sender_username": s_uname,
+                            "sender_name": s_name,
+                            "reply_to_msg_id": _reply_id(m),
+                            "sent_at": m.date if getattr(m, "date", None) else None,
+                        }
                     )
-                    reply_obj = getattr(m, "reply_to", None)
-                    reply_id = (
-                        (getattr(reply_obj, "reply_to_top_id", None) or getattr(reply_obj, "reply_to_msg_id", None))
-                        if reply_obj
-                        else None
-                    )
-                    res = ingest_message(
-                        db=db,
-                        group=g,
-                        raw_text=text_val,
-                        sender_username=s_uname,
-                        sender_name=s_name,
-                        message_id=int(m.id),
-                        reply_to_msg_id=reply_id,
-                        sent_at=m.date if getattr(m, "date", None) else None,
-                        allow_auto_task=False,
-                    )
+                for item in pending:
+                    res = await asyncio.to_thread(ingest_new_telegram_message, **item)
+                    if res.get("duplicate") or res.get("skipped"):
+                        continue
                     new_msgs += 1
                     if res.get("task_created"):
                         new_tasks += 1
-            except Exception:
+            except Exception as exc:
+                log.warning("telegram catch-up skipped chat %s: %s", g.chat_id, exc)
                 continue
 
-        _save_tg_raw(db, {"last_sync_at": dt.datetime.now(dt.timezone.utc).isoformat()})
+        _save_tg_raw(db, {"last_sync_at": dt.datetime.now(dt.timezone.utc).isoformat(), "delivery": "live"})
         return {"groups_checked": len(groups), "new_messages": new_msgs, "tasks_created": new_tasks}
     finally:
-        await client.disconnect()
+        if owns_client and client is not None:
+            await client.disconnect()
+
+
+async def run_live_listener() -> None:
+    """Тримає одне підключення до Telegram і одразу пише нові повідомлення з моніторених чатів."""
+    global _live_client
+    from telethon import events
+
+    while True:
+        client = None
+        attempted = False
+        try:
+            with SessionLocal() as db:
+                row = db.get(SystemState, TG_STATE_KEY)
+                raw = dict(row.value) if row and row.value else {}
+            if raw.get("status") != "connected" or not raw.get("session_string"):
+                await asyncio.sleep(8)
+                continue
+            attempted = True
+
+            client = _telegram_client(raw)
+            _live_client = client
+            await client.connect()
+            if not await client.is_user_authorized():
+                with SessionLocal() as db:
+                    _save_tg_raw(db, {"status": "error", "error": "Сесія Telegram недійсна. Підключіть акаунт знову."})
+                await asyncio.sleep(30)
+                continue
+
+            await client.get_dialogs(limit=300)
+            refresh_monitored_chat_ids(force=True)
+            session_string = raw["session_string"]
+
+            async def on_new(event):
+                try:
+                    chat_id = getattr(event, "chat_id", None)
+                    if chat_id is None or int(chat_id) not in refresh_monitored_chat_ids():
+                        return
+                    text = (getattr(event, "raw_text", None) or "").strip()
+                    if not text or event.message is None:
+                        return
+                    sender = await event.get_sender()
+                    s_uname, s_name = _sender_fields(sender)
+                    payload = {
+                        "chat_id": int(chat_id),
+                        "message_id": int(event.id),
+                        "raw_text": text,
+                        "sender_username": s_uname,
+                        "sender_name": s_name,
+                        "reply_to_msg_id": _reply_id(event.message),
+                        "sent_at": event.message.date if getattr(event.message, "date", None) else None,
+                    }
+                    asyncio.create_task(asyncio.to_thread(ingest_new_telegram_message, **payload))
+                except Exception:
+                    log.exception("live telegram message failed")
+
+            client.add_event_handler(on_new, events.NewMessage())
+            with SessionLocal() as db:
+                await sync_messages_from_telegram(db, per_group_limit=30, client=client)
+
+            async def stop_when_session_changes():
+                while client.is_connected():
+                    await asyncio.sleep(5)
+                    refresh_monitored_chat_ids(force=True)
+                    with SessionLocal() as db:
+                        row = db.get(SystemState, TG_STATE_KEY)
+                        cur = dict(row.value) if row and row.value else {}
+                    if cur.get("status") != "connected" or cur.get("session_string") != session_string:
+                        await client.disconnect()
+                        return
+
+            stopper = asyncio.create_task(stop_when_session_changes())
+            disconnected = asyncio.create_task(client.run_until_disconnected())
+            await asyncio.wait({stopper, disconnected}, return_when=asyncio.FIRST_COMPLETED)
+            for pending in (stopper, disconnected):
+                if not pending.done():
+                    pending.cancel()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("telegram live listener stopped")
+        finally:
+            if client is not None:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+            if _live_client is client:
+                _live_client = None
+        if attempted:
+            await asyncio.sleep(5)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -275,6 +461,52 @@ def ingest_message(
         max_id = db.scalar(select(func.max(TelegramMessageLog.message_id)).where(TelegramMessageLog.chat_id == group.chat_id))
         message_id = (max_id or 1000) + 1
 
+    with _ingest_lock:
+        existing = db.scalar(
+            select(TelegramMessageLog).where(
+                TelegramMessageLog.chat_id == group.chat_id,
+                TelegramMessageLog.message_id == int(message_id),
+            )
+        )
+        if existing:
+            return {
+                "log_id": existing.id,
+                "duplicate": True,
+                "task_created": existing.task_id is not None,
+                "task_id": str(existing.task_id) if existing.task_id else None,
+                "task_code": None,
+                "ai_result": existing.ai_extracted or {},
+            }
+        if group.username:
+            msg_link = f"https://t.me/{group.username.lstrip('@')}/{message_id}"
+        else:
+            clean_cid = str(abs(group.chat_id))
+            if clean_cid.startswith("100") and len(clean_cid) > 5:
+                clean_cid = clean_cid[3:]
+            msg_link = f"https://t.me/c/{clean_cid}/{message_id}"
+        log_entry = TelegramMessageLog(
+            group_id=group.id,
+            chat_id=group.chat_id,
+            chat_title=group.title,
+            message_id=int(message_id),
+            reply_to_msg_id=reply_to_msg_id,
+            sender_username=sender_username,
+            sender_name=sender_name,
+            raw_text=raw_text,
+            message_link=msg_link,
+            is_actionable=False,
+            ai_intent="pending",
+            ai_confidence=0,
+            ai_extracted={},
+            sent_at=now,
+        )
+        db.add(log_entry)
+        group.messages_parsed = (group.messages_parsed or 0) + 1
+        group.last_message_at = now
+        db.commit()
+        db.refresh(log_entry)
+        db.refresh(group)
+
     # Збираємо контекст попередніх повідомлень у цій групі (або гілці reply)
     context_messages: List[str] = []
     reply_text: Optional[str] = None
@@ -291,7 +523,7 @@ def ingest_message(
 
     recent_logs = db.scalars(
         select(TelegramMessageLog)
-        .where(TelegramMessageLog.chat_id == group.chat_id)
+        .where(TelegramMessageLog.chat_id == group.chat_id, TelegramMessageLog.id != log_entry.id)
         .order_by(TelegramMessageLog.id.desc())
         .limit(4)
     ).all()
@@ -301,18 +533,29 @@ def ingest_message(
             context_messages.append(line)
 
     is_sup = task_ai_parser.is_support_sender(sender_username, sender_name)
-    ai_result = task_ai_parser.analyze_telegram_message(
-        db=db,
-        raw_text=raw_text,
-        sender_username=sender_username,
-        sender_name=sender_name,
-        chat_title=group.title,
-        context_messages=context_messages,
-        reply_text=reply_text,
-        group_team_id=group.team_id,
-        group_client_id=group.client_id,
-        topic_filter=group.topic_filter,
-    )
+    try:
+        ai_result = task_ai_parser.analyze_telegram_message(
+            db=db,
+            raw_text=raw_text,
+            sender_username=sender_username,
+            sender_name=sender_name,
+            chat_title=group.title,
+            context_messages=context_messages,
+            reply_text=reply_text,
+            group_team_id=group.team_id,
+            group_client_id=group.client_id,
+            topic_filter=group.topic_filter,
+        )
+    except Exception:
+        log.exception("telegram message analysis failed")
+        ai_result = {
+            "is_actionable": False,
+            "category": "noise",
+            "confidence": 0,
+            "title": raw_text[:100],
+            "reasoning": "Аналіз тимчасово недоступний. Текст уже в потоці.",
+            "engine": "error",
+        }
     if is_sup and not force_create_task:
         ai_result["is_actionable"] = False
         ai_result["reasoning"] = "Повідомлення від саппорту нашої команди (частина діалогу)."
@@ -326,15 +569,6 @@ def ingest_message(
         and ai_result.get("is_actionable", False)
         and int(ai_result.get("confidence", 0)) >= threshold
     )
-
-    # Формуємо посилання на повідомлення в Telegram
-    if group.username:
-        msg_link = f"https://t.me/{group.username.lstrip('@')}/{message_id}"
-    else:
-        clean_cid = str(abs(group.chat_id))
-        if clean_cid.startswith("100") and len(clean_cid) > 5:
-            clean_cid = clean_cid[3:]
-        msg_link = f"https://t.me/c/{clean_cid}/{message_id}"
 
     sender_display = (
         f"@{sender_username.lstrip('@')} ({sender_name})"
@@ -391,27 +625,12 @@ def ingest_message(
         db.add(created_task)
         db.flush()
         group.tasks_created = (group.tasks_created or 0) + 1
+        log_entry.task_id = created_task.id
 
-    log_entry = TelegramMessageLog(
-        group_id=group.id,
-        chat_id=group.chat_id,
-        chat_title=group.title,
-        message_id=message_id,
-        reply_to_msg_id=reply_to_msg_id,
-        sender_username=sender_username,
-        sender_name=sender_name,
-        raw_text=raw_text,
-        message_link=msg_link,
-        is_actionable=bool(ai_result.get("is_actionable", False)),
-        ai_intent=ai_result.get("category", "noise"),
-        ai_confidence=int(ai_result.get("confidence", 0)),
-        ai_extracted=ai_result,
-        task_id=created_task.id if created_task else None,
-        sent_at=now,
-    )
-    db.add(log_entry)
-    group.messages_parsed = (group.messages_parsed or 0) + 1
-    group.last_message_at = now
+    log_entry.is_actionable = bool(ai_result.get("is_actionable", False))
+    log_entry.ai_intent = ai_result.get("category", "noise")
+    log_entry.ai_confidence = int(ai_result.get("confidence", 0))
+    log_entry.ai_extracted = ai_result
     db.commit()
     if created_task:
         db.refresh(created_task)
@@ -699,143 +918,9 @@ def create_task_from_thread(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Початкове наповнення структури (реальні команди + демо-потік Telegram)
+# Стартова структура задачника
 # ─────────────────────────────────────────────────────────────────────────────
 
 def ensure_initial_structure(db: Session) -> None:
-    """Якщо таблиця груп порожня (і демо ще не ініціалізувалося раніше) — створює стартові робочі групи."""
-    seeded_flag = db.get(SystemState, "tasks_demo_seeded")
-    tg_state = db.get(SystemState, TG_STATE_KEY)
-    if seeded_flag or (tg_state and tg_state.value and tg_state.value.get("status") == "connected"):
-        return
-
-    existing_groups = db.scalar(select(func.count()).select_from(TelegramGroup)) or 0
-    if existing_groups > 0:
-        db.add(SystemState(key="tasks_demo_seeded", value={"seeded": True}))
-        db.commit()
-        return
-
-    db.add(SystemState(key="tasks_demo_seeded", value={"seeded": True}))
-
-    teams = db.scalars(select(Team).order_by(Team.name)).all()
-    team_298 = next((t for t in teams if "298" in t.name), teams[0] if teams else None)
-    team_4445 = next((t for t in teams if "4445" in t.name), teams[1] if len(teams) > 1 else team_298)
-    first_user = db.scalar(select(User).order_by(User.created_at))
-
-    g1 = TelegramGroup(
-        chat_id=-1002198451298,
-        title="CPA Samurai Team 298 | Баєри & Картки",
-        chat_type="supergroup",
-        is_monitored=True,
-        auto_create_tasks=True,
-        team_id=team_298.id if team_298 else None,
-        default_assignee_id=first_user.id if first_user else None,
-        topic_filter="Звертати особливу увагу на деклайни карток FBM, видачу акаунтів та звірку спенду по WebLumi, WebDD, WebTxmmy.",
-    )
-    g2 = TelegramGroup(
-        chat_id=-1002198454445,
-        title="CPA Samurai Team 4445 | Операційний чат",
-        chat_type="supergroup",
-        is_monitored=True,
-        auto_create_tasks=True,
-        team_id=team_4445.id if team_4445 else None,
-        default_assignee_id=first_user.id if first_user else None,
-        topic_filter="Запити на розшарку БМ, ліміти та нові кабінети для баєрів команди.",
-    )
-    g3 = TelegramGroup(
-        chat_id=-1002198459900,
-        title="Skull Partners | Фарм, AdsPower & Техвідділ",
-        chat_type="supergroup",
-        is_monitored=True,
-        auto_create_tasks=True,
-        default_assignee_id=first_user.id if first_user else None,
-        topic_filter="Внутрішній чат фармерів: чеки, селфі, проксі, пачки від постачальників, інтеграція AdsPower.",
-    )
-    db.add_all([g1, g2, g3])
-    db.commit()
-
-    now = dt.datetime.now(dt.timezone.utc)
-    sample_stream = [
-        (
-            g1,
-            "WebLumi",
-            "Igor WebLumi",
-            "Привіт усім! Запускаю нову зв'язку сьогодні.",
-            101,
-            None,
-            now - dt.timedelta(hours=3, minutes=20),
-        ),
-        (
-            g1,
-            "WebLumi",
-            "Igor WebLumi",
-            "Хлопці, терміново! По WebLumi карта ••9443 почала бити деклайн на $20.59, трафік стоїть! Перевірте баланс субакаунта або підв'яжіть нову картку плз 🚨",
-            102,
-            101,
-            now - dt.timedelta(hours=3, minutes=15),
-        ),
-        (
-            g1,
-            "WebTxmmy",
-            "Tommy Media",
-            "Дайте 5 аків США з лімітом 250$ під запуск на вечір, і одразу розшарте на БМ 849201948271625",
-            103,
-            None,
-            now - dt.timedelta(hours=2, minutes=30),
-        ),
-        (
-            g1,
-            "WebDD",
-            "Denys WebDD",
-            "Ок, дякую 👍",
-            104,
-            None,
-            now - dt.timedelta(hours=2, minutes=10),
-        ),
-        (
-            g2,
-            "WebDD",
-            "Denys WebDD",
-            "Потрібно розшарити піксель і БМ 391048572619384 на 3 кабінети WebDD, бо зараз не бачить ліди в кабінеті",
-            201,
-            None,
-            now - dt.timedelta(hours=1, minutes=40),
-        ),
-        (
-            g3,
-            "farm_lead",
-            "Максим Фарм",
-            "Акаунт FB-0001 вилетів на чекпоінт (селфі + код 2FA), потрібно відкрити в AdsPower і пройти перевірку до кінця дня",
-            301,
-            None,
-            now - dt.timedelta(minutes=50),
-        ),
-        (
-            g3,
-            "ops_manager",
-            "Олексій Ops",
-            "Потрібно докупити пачку 30 аків Польща (PL) у постачальника на завтра під залив команди",
-            302,
-            None,
-            now - dt.timedelta(minutes=25),
-        ),
-    ]
-
-    for grp, uname, sname, txt, mid, r_id, ts_val in sample_stream:
-        ingest_message(
-            db=db,
-            group=grp,
-            raw_text=txt,
-            sender_username=uname,
-            sender_name=sname,
-            message_id=mid,
-            reply_to_msg_id=r_id,
-            sent_at=ts_val,
-        )
-
-    # Переведемо декілька стартових задач у різні колонки Канбану для наочності
-    tasks = db.scalars(select(TeamTask).order_by(TeamTask.created_at.asc())).all()
-    if len(tasks) >= 3:
-        tasks[0].status = "in_progress"
-        tasks[1].status = "todo"
-        db.commit()
+    """Сумісність викликів. Демо-групи більше не пишемо в бойову БД."""
+    return

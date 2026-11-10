@@ -5,14 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import actor_of, admin_only
+from app.api.deps import actor_of, admin_only, require_section
 from app.core.db import get_db
 from app.models import Client, ClientPayment, User
 from app.schemas.api import ClientReport, FinanceOverview, PaymentIn, PaymentOut
 from app.services import finance as svc
 
 # Фінанси — лише admin (operator без фінансів, viewer без цього розділу за рішенням: фінанси чутливі)
-router = APIRouter(prefix="/api/finance", tags=["finance"], dependencies=[Depends(admin_only)])
+router = APIRouter(
+    prefix="/api/finance",
+    tags=["finance"],
+    dependencies=[Depends(admin_only), Depends(require_section("finance"))],
+)
 
 
 @router.get("", response_model=FinanceOverview)

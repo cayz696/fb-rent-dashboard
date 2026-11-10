@@ -5,7 +5,7 @@ import { type ReactNode } from "react";
 import useSWR from "swr";
 import { Card, CardHeader, Empty, PageHeader } from "@/components/ui";
 import { fetcher } from "@/lib/api";
-import { isAdmin, useMe } from "@/lib/session";
+import { hasSectionAccess, isAdmin, useMe } from "@/lib/session";
 import type { FinanceOverview } from "@/lib/types";
 import { money } from "@/lib/utils";
 
@@ -22,9 +22,10 @@ function Kpi({ label, value, icon, tone }: { label: string; value: string; icon:
 
 export default function FinancePage() {
   const { user } = useMe();
-  const { data } = useSWR<FinanceOverview>(isAdmin(user) ? "/api/finance" : null, fetcher, { refreshInterval: 30000 });
+  const allowed = isAdmin(user) && hasSectionAccess(user, "finance");
+  const { data } = useSWR<FinanceOverview>(allowed ? "/api/finance" : null, fetcher, { refreshInterval: 30000 });
 
-  if (user && !isAdmin(user)) return <><PageHeader title="Фінанси" /><div className="panel"><Empty>Розділ доступний лише адміну.</Empty></div></>;
+  if (user && !allowed) return <><PageHeader title="Фінанси" /><div className="panel"><Empty>Немає доступу до цього розділу.</Empty></div></>;
   if (!data) return <><PageHeader title="Фінанси" /><p className="text-muted">Завантаження…</p></>;
 
   return (

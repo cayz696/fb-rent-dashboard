@@ -52,6 +52,13 @@ def get_ai_config(db: Session) -> Dict[str, Any]:
     }
 
 
+def public_ai_config(db: Session) -> Dict[str, Any]:
+    """Конфіг для API-відповідей: без сирого ключа."""
+    cfg = dict(get_ai_config(db))
+    cfg.pop("api_key", None)
+    return cfg
+
+
 def save_ai_config(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
     row = db.get(SystemState, AI_CONFIG_KEY)
     current = dict(row.value) if row and row.value else {}
@@ -71,7 +78,7 @@ def save_ai_config(db: Session, payload: Dict[str, Any]) -> Dict[str, Any]:
     else:
         row.value = current
     db.commit()
-    return get_ai_config(db)
+    return public_ai_config(db)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

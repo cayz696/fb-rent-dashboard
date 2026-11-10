@@ -21,6 +21,10 @@ from app.services.state_machine import TransitionError, next_stages
 router = APIRouter(prefix="/api", tags=["accounts"])
 
 
+def _full_out(db: Session, a: Account, user: User) -> AccountOut:
+    return to_out(a, user, spend_svc.snapshot_view([a], db), fbm_link_svc.account_cards([a], db))
+
+
 def to_out(a: Account, user: User, snaps: dict | None = None, cards: dict | None = None) -> AccountOut:
     out = AccountOut.model_validate(a)
     if snaps and a.id in snaps:
@@ -105,13 +109,13 @@ def create_account(body: AccountCreate, db: Session = Depends(get_db), user: Use
         fields["purchase_cost"] = None
     acc = svc.create_account(db, actor_of(user), **fields)
     db.commit()
-    return to_out(acc, user)
+    return _full_out(db, acc, user)
 
 
 @router.get("/accounts/{account_id}", response_model=AccountOut)
 def get_account(account_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     acc = _get(db, account_id)
-    return to_out(acc, user, spend_svc.snapshot_view([acc], db), fbm_link_svc.account_cards([acc], db))
+    return _full_out(db, acc, user)
 
 
 @router.patch("/accounts/{account_id}", response_model=AccountOut)
@@ -126,7 +130,7 @@ def patch_account(
     if "ad_account_id" in changes:
         spend_svc.backfill(db, acc)
     db.commit()
-    return to_out(acc, user, spend_svc.snapshot_view([acc], db))
+    return _full_out(db, acc, user)
 
 
 @router.post("/accounts/{account_id}/transition", response_model=AccountOut)
@@ -158,7 +162,7 @@ def transition(
         except bridge_svc.BridgeError:
             pass
     db.commit()
-    return to_out(acc, user)
+    return _full_out(db, acc, user)
 
 
 def _events_out(db: Session, events: list[AccountEvent]) -> list[EventOut]:

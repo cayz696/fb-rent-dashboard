@@ -5,7 +5,8 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select, distinct
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -75,8 +76,11 @@ def backfill(db: Session, acc: Account) -> int:
 
 
 def latest_by_ad(db: Session, ad_ids: list[str] | None = None) -> dict[str, SpendSnapshot]:
-    stmt = select(SpendSnapshot).distinct(SpendSnapshot.ad_account_id).where(SpendSnapshot.ad_account_id != "?").order_by(
-        SpendSnapshot.ad_account_id, SpendSnapshot.received_at.desc(), SpendSnapshot.id.desc()
+    stmt = (
+        select(SpendSnapshot)
+        .ext(distinct_on(SpendSnapshot.ad_account_id))
+        .where(SpendSnapshot.ad_account_id != "?")
+        .order_by(SpendSnapshot.ad_account_id, SpendSnapshot.received_at.desc(), SpendSnapshot.id.desc())
     )
     if ad_ids is not None:
         if not ad_ids:
@@ -106,7 +110,9 @@ def daily_series(db: Session, ad_id: str, days: int) -> list[dict]:
     today = today_kyiv()
     start = today - timedelta(days=days - 1)
     rows = db.scalars(
-        select(SpendSnapshot).distinct(SpendSnapshot.date).where(SpendSnapshot.ad_account_id == ad_id, SpendSnapshot.date >= start)
+        select(SpendSnapshot)
+        .ext(distinct_on(SpendSnapshot.date))
+        .where(SpendSnapshot.ad_account_id == ad_id, SpendSnapshot.date >= start)
         .order_by(SpendSnapshot.date, SpendSnapshot.received_at.desc(), SpendSnapshot.id.desc())
     ).all()
     by_date = {r.date: r.spend_today for r in rows}

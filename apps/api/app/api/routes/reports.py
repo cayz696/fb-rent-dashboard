@@ -2,7 +2,7 @@ from __future__ import annotations
 """Розділ «Звітність» (Отчетность): категорії витрат, облік витрат, формула відсотка,
 розрахунок прибутку, графік та Точка прибутку (Break-even point)."""
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import can_write, current_user
+from app.api.deps import can_write, require_section
 from app.core.db import get_db
 from app.models import (
     Account,
@@ -19,13 +19,15 @@ from app.models import (
     Expense,
     ExpenseCategory,
     Stage,
-    SystemState,
     User,
 )
-from app.services import buyers_sync
 from app.services.spend import today_kyiv
 
-router = APIRouter(prefix="/api/reports", tags=["reports"])
+router = APIRouter(
+    prefix="/api/reports",
+    tags=["reports"],
+    dependencies=[Depends(require_section("reports"))],
+)
 
 DEFAULT_CATEGORIES = [
     ("Закупівля акаунтів (Фарм/Автореги)", "#f59e0b"),
@@ -60,7 +62,7 @@ class ExpenseIn(BaseModel):
 
 
 @router.get("/categories")
-def list_categories(db: Session = Depends(get_db), _: User = Depends(current_user)):
+def list_categories(db: Session = Depends(get_db)):
     cats = _ensure_default_categories(db)
     return [{"id": str(c.id), "name": c.name, "color": c.color} for c in cats]
 
@@ -132,7 +134,6 @@ def report_summary(
     fee_percent: Decimal = Query(Decimal("7.00"), ge=0, le=100),
     include_batches_cost: bool = True,
     db: Session = Depends(get_db),
-    _: User = Depends(current_user),
 ):
     cats = _ensure_default_categories(db)
     cats_map = {c.id: c for c in cats}
@@ -183,7 +184,7 @@ def report_summary(
 
     total_expenses = (manual_expenses_total + batches_cost).quantize(Decimal("0.01"))
 
-    # 2. Спенд за період (з BuyerDailySpend; якщо за період ще немає поденних записів — беремо сумарний спенд карток FBM)
+    # 2. Спенд за період — лише поденні фіксації. Lifetime зі знімка FBM сюди не підставляємо.
     daily_rows = db.scalars(
         select(BuyerDailySpend).where(BuyerDailySpend.date >= d_from, BuyerDailySpend.date <= d_to)
     ).all()
@@ -192,16 +193,7 @@ def report_summary(
         eff = r.spend_fbm if (r.spend_fbm and r.spend_fbm > Decimal("0")) else (r.spend_sheet or Decimal("0"))
         spend_by_day[r.date] = spend_by_day.get(r.date, Decimal("0")) + eff
 
-    total_spend = sum(spend_by_day.values(), Decimal("0"))
-    if total_spend == Decimal("0") and d_from <= today <= d_to:
-        # Fallback на загальний спенд зі знімка FBM, щоб графік і калькулятор одразу працювали на реальних $119k+
-        cards = buyers_sync._get_snapshot_cards(db)
-        snap_total = sum((buyers_sync.parse_money(c.get("spend")) or Decimal("0") for c in cards), Decimal("0"))
-        if snap_total > Decimal("0"):
-            total_spend = snap_total
-            spend_by_day[today] = snap_total
-
-    total_spend = total_spend.quantize(Decimal("0.01"))
+    total_spend = sum(spend_by_day.values(), Decimal("0")).quantize(Decimal("0.01"))
 
     # 3. Продажі акаунтів за період
     sold_accs = db.scalars(

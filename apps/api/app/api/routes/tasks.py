@@ -1,6 +1,7 @@
 from __future__ import annotations
 """API Задачника команди, інтеграції з особистим Telegram-акаунтом (MTProto) та ШІ-парсера контексту."""
 import datetime as dt
+import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +16,8 @@ from app.models import Buyer, Client, Team, TeamTask, TelegramGroup, TelegramMes
 from app.services import task_ai_parser, telegram_tasks
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+log = logging.getLogger("fbrent.tasks")
+_TASK_CATEGORIES = {"issue_accounts", "card_issue", "bm_share", "account_check", "procurement", "finance", "general"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -61,7 +64,7 @@ class TelegramGroupCreateIn(BaseModel):
     username: Optional[str] = None
     chat_type: str = "supergroup"
     is_monitored: bool = True
-    auto_create_tasks: bool = False
+    auto_create_tasks: bool = True
     team_id: Optional[uuid.UUID] = None
     client_id: Optional[uuid.UUID] = None
     default_assignee_id: Optional[uuid.UUID] = None
@@ -312,7 +315,7 @@ def get_tasks_overview(
         "threads": threads,
         "recent_messages": [_serialize_log(l, tasks_by_id) for l in recent_logs],
         "telegram_state": telegram_tasks.get_telegram_state(db),
-        "ai_config": task_ai_parser.get_ai_config(db),
+        "ai_config": task_ai_parser.public_ai_config(db),
         "users": [{"id": str(u.id), "name": u.name, "username": u.username, "role": u.role.value} for u in users_map.values()],
         "teams": [{"id": str(t.id), "name": t.name} for t in teams_map.values()],
         "buyers": [{"id": str(b.id), "name": b.name, "team_id": str(b.team_id) if b.team_id else None} for b in buyers_map.values()],
@@ -629,6 +632,7 @@ def simulate_incoming_telegram_message(body: SimulateMessageIn, db: Session = De
         sender_name=body.sender_name,
         reply_to_msg_id=body.reply_to_msg_id,
         force_create_task=body.force_create_task,
+        allow_auto_task=True,
     )
     return res
 
@@ -643,35 +647,47 @@ def force_create_task_from_log(log_id: int, db: Session = Depends(get_db), user:
         return {"ok": True, "task_id": str(l.task_id)}
 
     group = db.get(TelegramGroup, l.group_id) if l.group_id else None
-    ai_res = l.ai_extracted or {}
-    ents = ai_res.get("entities") or {}
-    b_id = uuid.UUID(ents["buyer_id"]) if ents.get("buyer_id") else None
-    t_id = uuid.UUID(ents["team_id"]) if ents.get("team_id") else (group.team_id if group else None)
-    c_id = uuid.UUID(ents["client_id"]) if ents.get("client_id") else (group.client_id if group else None)
+    ai_res = l.ai_extracted if isinstance(l.ai_extracted, dict) else {}
+    ents = ai_res.get("entities") if isinstance(ai_res.get("entities"), dict) else {}
 
-    cat = ai_res.get("category") if ai_res.get("category") not in (None, "noise") else "general"
-    title = ai_res.get("title")
+    def _uuid(value):
+        if not value:
+            return None
+        try:
+            return uuid.UUID(str(value))
+        except (ValueError, TypeError):
+            return None
+
+    b_id = _uuid(ents.get("buyer_id"))
+    t_id = _uuid(ents.get("team_id")) or (group.team_id if group else None)
+    c_id = _uuid(ents.get("client_id")) or (group.client_id if group else None)
+
+    cat = ai_res.get("category") if ai_res.get("category") in _TASK_CATEGORIES else "general"
+    title = ai_res.get("title") if isinstance(ai_res.get("title"), str) else ""
     if not title or title in ("Повідомлення без задачі (чат)", "Інформаційне повідомлення"):
-        title = (l.raw_text[:80] + "…") if len(l.raw_text) > 80 else l.raw_text
+        raw = l.raw_text or "Задача з Telegram"
+        title = (raw[:80] + "…") if len(raw) > 80 else raw
+    title = title[:250]
+    sender = f"@{l.sender_username}" if l.sender_username else (l.sender_name or "Учасник")
 
     task = TeamTask(
         title=title,
         description=ai_res.get("description") or f"Створено вручну з повідомлення у «{l.chat_title or 'Telegram'}»",
         raw_source_text=l.raw_text,
         status="inbox",
-        priority=ai_res.get("priority") if ai_res.get("priority") in ("medium", "high", "urgent") else "medium",
+        priority=ai_res.get("priority") if ai_res.get("priority") in ("low", "medium", "high", "urgent") else "medium",
         category=cat,
         source="telegram",
         telegram_group_id=l.group_id,
-        telegram_chat_title=l.chat_title,
-        telegram_sender=f"@{l.sender_username}" if l.sender_username else (l.sender_name or "Учасник"),
+        telegram_chat_title=(l.chat_title or "")[:250] or None,
+        telegram_sender=sender[:120],
         telegram_message_link=l.message_link,
         assignee_id=group.default_assignee_id if group else user.id,
         creator_id=user.id,
         team_id=t_id,
         buyer_id=b_id,
         client_id=c_id,
-        checklist=ai_res.get("checklist") or task_ai_parser._build_checklist(cat, ents),
+        checklist=ai_res.get("checklist") if isinstance(ai_res.get("checklist"), list) and ai_res.get("checklist") else task_ai_parser._build_checklist(cat, ents),
         ai_context={
             "confidence": ai_res.get("confidence", 75),
             "engine": ai_res.get("engine", "manual_promote"),
@@ -686,12 +702,20 @@ def force_create_task_from_log(log_id: int, db: Session = Depends(get_db), user:
         },
     )
     db.add(task)
-    db.flush()
-    l.task_id = task.id
-    l.is_actionable = True
-    if group:
-        group.tasks_created = (group.tasks_created or 0) + 1
-    db.commit()
+    try:
+        db.flush()
+        l.task_id = task.id
+        l.is_actionable = True
+        if group:
+            group.tasks_created = (group.tasks_created or 0) + 1
+        db.commit()
+        db.refresh(task)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        log.exception("create task from telegram log %s failed", log_id)
+        raise HTTPException(400, "Не вдалося створити задачу з цього повідомлення") from exc
     return {"ok": True, "task_id": str(task.id), "task_code": task.code}
 
 

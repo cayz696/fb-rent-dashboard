@@ -15,7 +15,7 @@ const COL_LIMIT = 40;  // карток на колонку; решта — по�
 
 export default function KanbanPage() {
   const { user } = useMe();
-  const { data, mutate } = useSWR<AccountList>("/api/accounts?limit=1000", fetcher, { refreshInterval: 30000 });
+  const { data, mutate } = useSWR<AccountList>("/api/accounts?limit=5000", fetcher, { refreshInterval: 30000 });
   const [drag, setDrag] = useState<Account | null>(null);
   const [over, setOver] = useState<Stage | null>(null);
   const [dialog, setDialog] = useState<{ acc: Account; to: Stage } | null>(null);

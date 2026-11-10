@@ -4,6 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { Card, CardHeader, Empty, Modal } from "@/components/ui";
 import { fetcher } from "@/lib/api";
+import { canWrite, useMe } from "@/lib/session";
 import type { Account, FbmCode } from "@/lib/types";
 import { fmtDateTime, money } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ const statusColor = (s: string | null) =>
   s === "VALID CARD" ? "var(--success)" : s?.includes("BLOCK") ? "var(--stage-off-fg)" : "var(--warning)";
 
 export function AccountFbmCard({ acc }: { acc: Account }) {
+  const { user } = useMe();
   const [codes, setCodes] = useState(false);
   if (!acc.card_last4) {
     return (
@@ -23,7 +25,7 @@ export function AccountFbmCard({ acc }: { acc: Account }) {
   return (
     <Card>
       <CardHeader title="Картка FBM" icon={<CreditCard size={16} />}
-        right={acc.card_fbm_id && <button onClick={() => setCodes(true)} className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-surface-hover px-2 py-1 text-[11px] text-muted hover:text-main cursor-pointer"><KeyRound size={12} />3DS-коди</button>} />
+        right={acc.card_fbm_id && canWrite(user) && <button onClick={() => setCodes(true)} className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-surface-hover px-2 py-1 text-[11px] text-muted hover:text-main cursor-pointer"><KeyRound size={12} />3DS-коди</button>} />
       {!acc.card_fbm_id ? (
         <div className="px-5 py-6 text-[13px] text-muted">Картку •• {acc.card_last4} не знайдено у знімку FBM. Оновіть «Картки» або перевірте last4.</div>
       ) : (

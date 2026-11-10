@@ -10,6 +10,8 @@ venv/
 .logs/
 .pytest_cache/
 *.sql
+*.dump
 backups/
+desktop/db_snapshot.json.gz
 .DS_Store
 .dev-credentials

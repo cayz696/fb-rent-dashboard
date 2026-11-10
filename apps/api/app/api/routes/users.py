@@ -5,13 +5,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import admin_only
+from app.api.deps import admin_only, require_section
 from app.core.db import get_db
 from app.core.security import hash_password
 from app.models import Role, User
 from app.schemas.api import UserAdminOut, UserCreate, UserPatch
 
-router = APIRouter(prefix="/api/users", tags=["users"])
+router = APIRouter(
+    prefix="/api/users",
+    tags=["users"],
+    dependencies=[Depends(require_section("settings"))],
+)
 
 
 @router.get("", response_model=list[UserAdminOut])

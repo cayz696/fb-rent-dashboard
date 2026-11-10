@@ -145,11 +145,24 @@ export interface ReportSummary {
   expenses: ExpenseItem[];
   categories: ExpenseCategoryItem[];
 }
+export interface SystemBackupStatus {
+  backup_dir: string;
+  has_dump: boolean;
+  has_json: boolean;
+  has_env_transfer: boolean;
+  dump_file: string | null;
+  dump_size_bytes: number;
+  created_at: string | null;
+  db_empty: boolean;
+  live_counts: { users: number; accounts: number; teams: number; buyers: number };
+  counts?: { users: number; accounts: number; teams: number; buyers: number };
+}
 export interface SystemStatus {
   git_initialized: boolean; commit: string; branch: string; remote_url: string;
   last_commit_msg: string; behind_count: number;
   auto_sync_interval_hours: number; reconcile_interval_hours: number;
   last_spend_snapshot: string | null;
+  backup?: SystemBackupStatus | null;
 }
 
 export type TaskStatus = "inbox" | "todo" | "in_progress" | "review" | "done" | "rejected";

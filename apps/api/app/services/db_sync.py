@@ -48,6 +48,8 @@ def _serialize_val(v):
         return v.isoformat()
     if isinstance(v, Decimal):
         return str(v)
+    if isinstance(v, (dict, list, bool, int, float, str)):
+        return v
     return str(v)
 
 
