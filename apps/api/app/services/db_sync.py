@@ -36,7 +36,15 @@ TABLES_ORDER = [
     "telegram_message_logs",
 ]
 
-SNAPSHOT_PATH = Path(__file__).resolve().parents[4] / "desktop" / "db_snapshot.json.gz"
+def _snapshot_path() -> Path:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "desktop").is_dir() or (parent / "docker-compose.yml").is_file():
+            return parent / "desktop" / "db_snapshot.json.gz"
+    return Path("/tmp/db_snapshot.json.gz")
+
+
+SNAPSHOT_PATH = _snapshot_path()
 
 
 def _serialize_val(v):

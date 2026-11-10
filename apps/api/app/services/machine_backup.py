@@ -19,7 +19,15 @@ from app.core.db import SessionLocal
 from app.models import Account, Buyer, Team, User
 from app.services import db_sync
 
-ROOT_DIR = Path(__file__).resolve().parents[4]
+def _repo_root() -> Path:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "docker-compose.yml").is_file() or (parent / "setup_mac.sh").is_file():
+            return parent
+    return here.parents[min(2, len(here.parents) - 1)]
+
+
+ROOT_DIR = _repo_root()
 KEEP_BACKUPS = 10
 
 

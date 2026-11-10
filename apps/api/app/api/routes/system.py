@@ -1,6 +1,5 @@
 from __future__ import annotations
 """Керування десктоп-системою та оновленням через GitHub."""
-from pathlib import Path
 import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,7 +14,7 @@ from app.services import machine_backup
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
-ROOT_DIR = Path(__file__).resolve().parents[5]
+ROOT_DIR = machine_backup.ROOT_DIR
 
 
 def _run_git(args: list[str], timeout: int = 20) -> tuple[int, str]:

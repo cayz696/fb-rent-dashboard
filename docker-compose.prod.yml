@@ -1,0 +1,42 @@
+# Прод на VPS: Postgres і API лише у внутрішній мережі Docker.
+# Сайт слухає 127.0.0.1:3010, зовні його віддає Caddy.
+services:
+  db:
+    image: postgres:16
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fbrent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fbrent}
+      POSTGRES_DB: ${POSTGRES_DB:-fbrent}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-fbrent} -d $${POSTGRES_DB:-fbrent}"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build: ./apps/api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fbrent}:${POSTGRES_PASSWORD:-fbrent}@db:5432/${POSTGRES_DB:-fbrent}
+      COOKIE_SECURE: "false"
+      APP_ENV: prod
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        API_URL: http://api:8000
+    environment:
+      API_URL: http://api:8000
+    ports: ["127.0.0.1:3010:3010"]
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
