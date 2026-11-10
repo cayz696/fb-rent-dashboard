@@ -233,7 +233,7 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
               </span>
             </div>
           ))}
-          {isAdmin(user) && (
+          {isAdmin(user) && sys?.git_initialized && (
             <div className="mt-2 border-t border-divider pt-2">
               <div className="flex items-center justify-between text-[11px] text-faint">
                 <span className="flex items-center gap-1 font-mono">

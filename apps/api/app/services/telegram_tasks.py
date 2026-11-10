@@ -725,8 +725,10 @@ def build_conversation_threads(
     """Групує останні повідомлення в кожній Telegram-групі за гілками діалогу (топіками або ланцюжками відповідей)
     та формує ШІ-резюме контексту, щоб менеджер бачив повну картину перед постановкою задачі."""
     groups_by_id = {g.id: g for g in groups}
+    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=3)
     all_logs = db.scalars(
         select(TelegramMessageLog)
+        .where(TelegramMessageLog.sent_at >= since)
         .order_by(TelegramMessageLog.chat_id, TelegramMessageLog.message_id.asc())
     ).all()
 

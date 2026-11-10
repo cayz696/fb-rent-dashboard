@@ -31,7 +31,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { Button, Card, CardHeader, Chip, Empty, ErrorNote, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
@@ -105,7 +105,7 @@ const STATUS_COLUMNS: { key: TaskStatus; title: string; subtitle: string; accent
   { key: "inbox", title: "Вхідні з Telegram", subtitle: "Нові розібрані ШІ", accent: "#a855f7" },
   { key: "todo", title: "До виконання", subtitle: "У черзі команди", accent: "#38bdf8" },
   { key: "in_progress", title: "В роботі", subtitle: "Виконуються зараз", accent: "#f59e0b" },
-  { key: "done", title: "Виконано", subtitle: "Закриті задачі", accent: "#10b981" },
+  { key: "done", title: "Виконано", subtitle: "За добу · старші в архіві", accent: "#10b981" },
 ];
 
 const SAMPLE_PROMPTS = [
@@ -147,7 +147,19 @@ export default function TasksPage() {
   const editable = canWrite(user);
 
   const [activeTab, setActiveTab] = useState<"board" | "stream" | "settings">("board");
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [viewMode, setViewModeState] = useState<"kanban" | "list">("kanban");
+  const [boardScope, setBoardScope] = useState<"active" | "archive">("active");
+  const [threadsOpen, setThreadsOpen] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("fbr_tasks_view");
+    if (saved === "list" || saved === "kanban") setViewModeState(saved);
+  }, []);
+
+  function setViewMode(mode: "kanban" | "list") {
+    setViewModeState(mode);
+    localStorage.setItem("fbr_tasks_view", mode);
+  }
 
   // Фільтри дошки
   const [searchQ, setSearchQ] = useState("");
@@ -208,6 +220,19 @@ export default function TasksPage() {
   const [aiSavedMsg, setAiSavedMsg] = useState("");
 
   const selectedTask = data?.tasks.find((t) => t.id === selectedTaskId) || null;
+
+  const allTasks = data?.tasks ?? [];
+  const isClosed = (t: TeamTaskItem) => t.status === "done" || t.status === "rejected";
+  const activeTasks = allTasks.filter((t) => !isClosed(t));
+  const archivedTasks = allTasks.filter(isClosed);
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  const recentlyDone = allTasks.filter(
+    (t) => t.status === "done" && Date.parse(t.completed_at || t.updated_at) >= dayAgo,
+  );
+  const tableTasks = boardScope === "archive" ? archivedTasks : activeTasks;
+  const openThreads = (data?.threads ?? []).filter(
+    (th) => !th.linked_task_id && th.resolution_state === "needs_action",
+  );
 
   async function quickStatusChange(task: TeamTaskItem, newStatus: TaskStatus) {
     await api(`/tasks/${task.id}`, { method: "PATCH", body: { status: newStatus } });
@@ -536,25 +561,45 @@ export default function TasksPage() {
         </div>
 
         {activeTab === "board" && (
-          <div className="flex items-center gap-1.5 rounded-lg border border-line bg-inset p-1">
-            <button
-              onClick={() => setViewMode("kanban")}
-              className={cn(
-                "cursor-pointer rounded px-2.5 py-1 text-[12px] font-medium transition",
-                viewMode === "kanban" ? "bg-surface-active text-main" : "text-muted hover:text-main",
-              )}
-            >
-              Канбан
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={cn(
-                "cursor-pointer rounded px-2.5 py-1 text-[12px] font-medium transition",
-                viewMode === "list" ? "bg-surface-active text-main" : "text-muted hover:text-main",
-              )}
-            >
-              Таблиця
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-lg border border-line bg-inset p-1">
+              {([
+                ["active", `Активні (${activeTasks.length})`],
+                ["archive", `Архів: виконані (${archivedTasks.length})`],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setBoardScope(key)}
+                  className={cn(
+                    "cursor-pointer rounded px-2.5 py-1 text-[12px] font-medium transition",
+                    boardScope === key ? "bg-accent text-on-accent" : "text-muted hover:text-main",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {boardScope === "active" && (
+              <div className="flex items-center gap-1 rounded-lg border border-line bg-inset p-1">
+                {([
+                  ["kanban", "Канбан"],
+                  ["list", "Таблиця"],
+                ] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setViewMode(key)}
+                    className={cn(
+                      "cursor-pointer rounded px-2.5 py-1 text-[12px] font-medium transition",
+                      viewMode === key ? "bg-accent text-on-accent" : "text-muted hover:text-main",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -565,34 +610,38 @@ export default function TasksPage() {
       {activeTab === "board" && (
         <div className="space-y-5">
           {/* Блок: Останні повідомлення та контекст по гілках Telegram для свідомої постановки задач */}
-          {data?.threads && data.threads.length > 0 && (
+          {boardScope === "active" && (data?.threads?.length ?? 0) > 0 && (
             <div className="panel space-y-3.5 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Bot size={18} className="text-purple-400" />
                   <div>
                     <h2 className="text-[15px] font-semibold text-main">
-                      Останні діалоги в Telegram (Контекст перед постановкою задачі)
+                      Розмови без задачі: {openThreads.length}
                     </h2>
                     <p className="text-[12px] text-muted">
-                      Повідомлення згруповані за гілками/клієнтами (👤 Клієнт ↔ 🛠 Саппорт), щоб бачити всю переписку й ставити задачу осмислено.
+                      Переписки з чатів за 3 дні, де клієнт щось попросив, а задачі ще немає. Відкрийте, перегляньте і за потреби натисніть «Поставити задачу».
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => setShowAllThreads((v) => !v)}>
-                    {showAllThreads
-                      ? "Показати лише активні діалоги"
-                      : `Показати всі діалоги (${data.threads.length})`}
+                  {threadsOpen && (
+                    <Button size="sm" variant="ghost" onClick={() => setShowAllThreads((v) => !v)}>
+                      {showAllThreads ? "Лише без задачі" : `Усі розмови (${data?.threads.length ?? 0})`}
+                    </Button>
+                  )}
+                  <Button size="sm" variant={threadsOpen ? "ghost" : "primary"} onClick={() => setThreadsOpen((v) => !v)}>
+                    {threadsOpen ? "Згорнути" : "Переглянути"}
                   </Button>
                 </div>
               </div>
 
+              {threadsOpen && (
               <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
-                {(showAllThreads
-                  ? data.threads
-                  : data.threads.filter((th) => th.resolution_state !== "resolved_in_chat").slice(0, 4)
-                ).map((th) => {
+                {(showAllThreads ? data?.threads ?? [] : openThreads).length === 0 && (
+                  <Empty>Усі розмови вже мають задачу або вирішені в чаті</Empty>
+                )}
+                {(showAllThreads ? data?.threads ?? [] : openThreads).map((th) => {
                   const cat = CATEGORY_META[th.category] || CATEGORY_META.general;
                   const stateStyle =
                     th.resolution_state === "needs_action"
@@ -713,6 +762,7 @@ export default function TasksPage() {
                   );
                 })}
               </div>
+              )}
             </div>
           )}
 
@@ -789,12 +839,13 @@ export default function TasksPage() {
           </div>
 
           {/* КАНБАН-ДОШКА */}
-          {viewMode === "kanban" ? (
+          {boardScope === "active" && viewMode === "kanban" ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-4">
               {STATUS_COLUMNS.map((col) => {
-                const colTasks = (data?.tasks || []).filter((t) =>
-                  col.key === "done" ? t.status === "done" || t.status === "review" : t.status === col.key,
-                );
+                const colTasks =
+                  col.key === "done"
+                    ? [...allTasks.filter((t) => t.status === "review"), ...recentlyDone]
+                    : allTasks.filter((t) => t.status === col.key);
                 return (
                   <div key={col.key} className="flex flex-col rounded-xl border border-line bg-inset/60 p-3">
                     <div className="mb-3 flex items-center justify-between px-1">
@@ -1035,7 +1086,14 @@ export default function TasksPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-divider">
-                  {data?.tasks.map((task) => {
+                  {tableTasks.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 text-center text-muted">
+                        {boardScope === "archive" ? "В архіві поки порожньо" : "Активних задач немає"}
+                      </td>
+                    </tr>
+                  )}
+                  {tableTasks.map((task) => {
                     const cat = CATEGORY_META[task.category] || CATEGORY_META.general;
                     const prio = PRIORITY_META[task.priority] || PRIORITY_META.medium;
                     return (

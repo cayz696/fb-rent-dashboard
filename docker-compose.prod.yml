@@ -22,6 +22,8 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fbrent}:${POSTGRES_PASSWORD:-fbrent}@db:5432/${POSTGRES_DB:-fbrent}
       COOKIE_SECURE: "false"
       APP_ENV: prod
+      FBRENT_BACKUP_DIR: /backups
+    volumes: ["./backups:/backups"]
     depends_on:
       db:
         condition: service_healthy
