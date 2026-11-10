@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.core.db import get_db
-from app.models import BridgeCommand, Client, CommandStatus, Request, RequestStatus, User
+from app.models import BridgeCommand, Client, CommandStatus, Request, RequestStatus, User, UserNotification
 from app.services import signals as signals_svc
 
 router = APIRouter(prefix="/api", tags=["notifications"])
@@ -70,6 +70,22 @@ def notifications(db: Session = Depends(get_db), _: User = Depends(current_user)
             type="bridge_error", severity="danger", title="AdsPower: помилка",
             message=f"{c.command}: {(c.result or {}).get('error', '')}"[:160],
             link=None, created_at=c.done_at or now,
+        ))
+
+    personal = db.scalars(
+        select(UserNotification)
+        .where(UserNotification.user_id == _.id)
+        .order_by(UserNotification.created_at.desc())
+        .limit(30)
+    ).all()
+    for n in personal:
+        items.append(Notification(
+            type=n.kind,
+            severity="info",
+            title=n.title,
+            message=n.message,
+            link=n.link or "/tasks",
+            created_at=n.created_at,
         ))
 
     items.sort(key=lambda n: n.created_at, reverse=True)

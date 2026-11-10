@@ -410,8 +410,8 @@ export default function TasksPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-[28px] font-bold tracking-tight">Задачник Команди</h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-[22px] font-bold tracking-tight sm:text-[28px]">Задачник Команди</h1>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-0.5 text-[12px] font-semibold text-purple-300">
               <Sparkles size={13} /> Telegram MTProto + ШІ Контекст
             </span>
@@ -661,7 +661,7 @@ export default function TasksPage() {
                                 </span>
                                 {m.sent_at && (
                                   <span className="font-mono text-faint">
-                                    {new Date(m.sent_at).toLocaleTimeString("uk-UA", {
+                                    {new Date(m.sent_at).toLocaleTimeString("uk-UA", { timeZone: "Europe/Kyiv",
                                       hour: "2-digit",
                                       minute: "2-digit",
                                     })}
@@ -718,7 +718,7 @@ export default function TasksPage() {
 
           {/* Панель фільтрів */}
           <div className="panel flex flex-wrap items-center gap-3 p-3.5">
-            <div className="relative min-w-[220px] flex-1">
+            <div className="relative w-full min-w-0 flex-1 sm:min-w-[220px]">
               <Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-faint" />
               <Input
                 value={searchQ}
@@ -728,7 +728,7 @@ export default function TasksPage() {
               />
             </div>
 
-            <Select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="w-auto min-w-[175px]">
+            <Select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="w-full min-w-0 sm:w-auto sm:min-w-[175px]">
               <option value="">Усі категорії</option>
               {Object.entries(CATEGORY_META).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -740,7 +740,7 @@ export default function TasksPage() {
             <Select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
-              className="w-auto min-w-[150px]"
+              className="w-full min-w-0 sm:w-auto sm:min-w-[150px]"
             >
               <option value="">Будь-який пріоритет</option>
               <option value="urgent">Терміново 🔥</option>
@@ -749,7 +749,7 @@ export default function TasksPage() {
               <option value="low">Низький</option>
             </Select>
 
-            <Select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)} className="w-auto min-w-[175px]">
+            <Select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)} className="w-full min-w-0 sm:w-auto sm:min-w-[175px]">
               <option value="">Усі команди</option>
               {data?.teams.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -761,7 +761,7 @@ export default function TasksPage() {
             <Select
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
-              className="w-auto min-w-[165px]"
+              className="w-full min-w-0 sm:w-auto sm:min-w-[165px]"
             >
               <option value="">Усі виконавці</option>
               {data?.users.map((u) => (
@@ -1246,7 +1246,7 @@ export default function TasksPage() {
                     return (
                       <div key={msg.id} className="flex flex-col gap-2 p-4 transition hover:bg-surface-hover/50">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
                             <span className="rounded bg-inset px-2 py-0.5 text-[11.5px] font-semibold text-main">
                               💬 {msg.chat_title || `Chat ${msg.chat_id}`}
                             </span>
@@ -1254,7 +1254,7 @@ export default function TasksPage() {
                               @{msg.sender_username || msg.sender_name || "user"}
                             </span>
                             <span className="text-[11px] text-faint">
-                              {new Date(msg.sent_at).toLocaleString("uk-UA", {
+                              {new Date(msg.sent_at).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv",
                                 day: "2-digit",
                                 month: "2-digit",
                                 hour: "2-digit",
@@ -2015,7 +2015,7 @@ function TaskDetailModal({
                       </span>
                       {tm.sent_at && (
                         <span className="font-mono text-faint">
-                          {new Date(tm.sent_at).toLocaleString("uk-UA", {
+                          {new Date(tm.sent_at).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv",
                             day: "2-digit",
                             month: "2-digit",
                             hour: "2-digit",
@@ -2498,7 +2498,7 @@ function CreateTaskFromThreadModal({
                   </span>
                   {m.sent_at && (
                     <span className="font-mono text-faint">
-                      {new Date(m.sent_at).toLocaleString("uk-UA", {
+                      {new Date(m.sent_at).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv",
                         day: "2-digit",
                         month: "2-digit",
                         hour: "2-digit",

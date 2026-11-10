@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import actor_of, can_write, current_user
 from app.core.db import get_db
 from app.models import Buyer, Client, Team, TeamTask, TelegramGroup, TelegramMessageLog, User
-from app.services import task_ai_parser, telegram_tasks
+from app.services import task_ai_parser, task_notify, telegram_tasks
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 log = logging.getLogger("fbrent.tasks")
@@ -422,6 +422,8 @@ def create_task(body: TaskCreateIn, db: Session = Depends(get_db), user: User = 
     db.add(t)
     db.commit()
     db.refresh(t)
+    task_notify.notify_assigned(db, t, actor_id=user.id)
+    db.commit()
     return {"id": str(t.id), "code": t.code}
 
 
@@ -431,13 +433,14 @@ def update_task(task_id: uuid.UUID, body: TaskPatchIn, db: Session = Depends(get
     if not t:
         raise HTTPException(404, "Задачу не знайдено")
 
+    old_status = t.status
+    old_assignee = t.assignee_id
     fields_set = body.model_fields_set
     if "title" in fields_set and body.title is not None:
         t.title = body.title.strip()
     if "description" in fields_set:
         t.description = body.description
     if "status" in fields_set and body.status is not None:
-        old_status = t.status
         t.status = body.status
         if body.status == "done" and old_status != "done":
             t.completed_at = dt.datetime.now(dt.timezone.utc)
@@ -460,6 +463,10 @@ def update_task(task_id: uuid.UUID, body: TaskPatchIn, db: Session = Depends(get
     if "checklist" in fields_set and body.checklist is not None:
         t.checklist = body.checklist
 
+    if "assignee_id" in fields_set and t.assignee_id != old_assignee:
+        task_notify.notify_assigned(db, t, actor_id=user.id)
+    if "status" in fields_set and body.status is not None:
+        task_notify.notify_status(db, t, old_status, t.status, actor_id=user.id)
     db.commit()
     return {"ok": True, "id": str(t.id), "status": t.status}
 
@@ -710,6 +717,8 @@ def force_create_task_from_log(log_id: int, db: Session = Depends(get_db), user:
             group.tasks_created = (group.tasks_created or 0) + 1
         db.commit()
         db.refresh(task)
+        task_notify.notify_assigned(db, task, actor_id=user.id)
+        db.commit()
     except HTTPException:
         raise
     except Exception as exc:

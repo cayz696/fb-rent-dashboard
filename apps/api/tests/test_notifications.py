@@ -47,3 +47,26 @@ def test_old_bridge_error_excluded(admin):
 
 def test_requires_login(client):
     assert client.get("/api/notifications").status_code == 401
+
+
+def test_assignee_gets_assignment_and_status(admin):
+    from tests.conftest import login
+
+    op = admin.post("/api/users", json={
+        "username": "worker1", "name": "Worker", "role": "operator", "password": "password123",
+    }).json()
+    created = admin.post("/api/tasks", json={
+        "title": "Замінити карту", "use_ai_enrichment": False, "assignee_id": op["id"],
+    })
+    assert created.status_code == 201, created.text
+    task_id = created.json()["id"]
+
+    worker = login("worker1", "password123")
+    mine = worker.get("/api/notifications").json()["items"]
+    assert any(i["type"] == "task_assigned" and "Замінити карту" in i["message"] for i in mine)
+    assert not any(i["type"] == "task_assigned" for i in admin.get("/api/notifications").json()["items"])
+
+    patched = admin.patch(f"/api/tasks/{task_id}", json={"status": "in_progress"})
+    assert patched.status_code == 200, patched.text
+    again = worker.get("/api/notifications").json()["items"]
+    assert any(i["type"] == "task_status" and "В роботі" in i["title"] for i in again)

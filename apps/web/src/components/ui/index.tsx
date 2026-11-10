@@ -48,8 +48,8 @@ export function Card({ className, children }: { className?: string; children: Re
 
 export function CardHeader({ title, icon, right }: { title: ReactNode; icon?: ReactNode; right?: ReactNode }) {
   return (
-    <header className="flex items-center justify-between gap-3 border-b border-divider px-5 py-4">
-      <h2 className="flex items-center gap-2 text-[15px] font-semibold">{icon}{title}</h2>
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-divider px-5 py-4">
+      <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold">{icon}{title}</h2>
       {right}
     </header>
   );

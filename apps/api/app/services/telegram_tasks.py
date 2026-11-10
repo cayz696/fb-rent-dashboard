@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 log = logging.getLogger("fbrent.telegram")
 _ingest_lock = threading.Lock()
 _live_client = None
+_chat_entities: dict[int, Any] = {}
 _monitored_ids: set[int] = set()
 _monitored_loaded_at = 0.0
 
@@ -302,7 +303,8 @@ async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25, cl
     try:
         for g in groups:
             try:
-                msgs = await client.get_messages(int(g.chat_id), limit=per_group_limit)
+                peer = _chat_entities.get(int(g.chat_id), int(g.chat_id))
+                msgs = await client.get_messages(peer, limit=per_group_limit)
                 pending = []
                 for m in reversed(list(msgs)):
                     if not m or not getattr(m, "message", None):
@@ -349,6 +351,25 @@ async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25, cl
             await client.disconnect()
 
 
+async def _remember_dialogs(client, chat_ids: set[int]) -> None:
+    """Проходить усі діалоги акаунта і запам'ятовує access hash, інакше Telethon не бачить супергрупи."""
+    global _chat_entities
+    found: dict[int, Any] = {}
+    async for dialog in client.iter_dialogs():
+        try:
+            found[int(dialog.id)] = dialog.input_entity
+        except Exception:
+            continue
+    for cid in chat_ids:
+        if cid in found:
+            continue
+        try:
+            found[cid] = await client.get_input_entity(cid)
+        except Exception:
+            log.warning("telegram chat %s is not visible to the connected account", cid)
+    _chat_entities = found
+
+
 async def run_live_listener() -> None:
     """Тримає одне підключення до Telegram і одразу пише нові повідомлення з моніторених чатів."""
     global _live_client
@@ -375,15 +396,20 @@ async def run_live_listener() -> None:
                 await asyncio.sleep(30)
                 continue
 
-            await client.get_dialogs(limit=300)
-            refresh_monitored_chat_ids(force=True)
-            session_string = raw["session_string"]
+            monitored = refresh_monitored_chat_ids(force=True)
+            await _remember_dialogs(client, monitored)
+            fresh_session = client.session.save()
+            with SessionLocal() as db:
+                _save_tg_raw(db, {"session_string": fresh_session, "delivery": "live"})
+            session_string = fresh_session
 
             async def on_new(event):
                 try:
                     chat_id = getattr(event, "chat_id", None)
                     if chat_id is None or int(chat_id) not in refresh_monitored_chat_ids():
                         return
+                    if getattr(event, "input_chat", None) is not None:
+                        _chat_entities[int(chat_id)] = event.input_chat
                     text = (getattr(event, "raw_text", None) or "").strip()
                     if not text or event.message is None:
                         return
@@ -404,7 +430,7 @@ async def run_live_listener() -> None:
 
             client.add_event_handler(on_new, events.NewMessage())
             with SessionLocal() as db:
-                await sync_messages_from_telegram(db, per_group_limit=30, client=client)
+                await sync_messages_from_telegram(db, per_group_limit=50, client=client)
 
             async def stop_when_session_changes():
                 while client.is_connected():
@@ -626,6 +652,8 @@ def ingest_message(
         db.flush()
         group.tasks_created = (group.tasks_created or 0) + 1
         log_entry.task_id = created_task.id
+        from app.services.task_notify import notify_assigned
+        notify_assigned(db, created_task)
 
     log_entry.is_actionable = bool(ai_result.get("is_actionable", False))
     log_entry.ai_intent = ai_result.get("category", "noise")

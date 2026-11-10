@@ -371,3 +371,15 @@ class TelegramMessageLog(Base):
     created_at: Mapped[datetime] = ts()
 
 
+class UserNotification(Base):
+    """Особисте сповіщення: призначення задачі або зміна її статусу."""
+    __tablename__ = "user_notifications"
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(256))
+    message: Mapped[str] = mapped_column(Text)
+    link: Mapped[str | None] = mapped_column(String(256))
+    created_at: Mapped[datetime] = ts()
+
+

@@ -45,7 +45,7 @@ function autofixGateway(sys?: SystemStatus): [string, string, string] {
   return ["Автофіксація (3–4г)", `застаріла ${Math.round(hours)}г`, "var(--warning)"];
 }
 
-export function Sidebar({ user }: { user: User }) {
+export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; mobileOpen?: boolean; onNavigate?: () => void }) {
   const path = usePathname();
   const router = useRouter();
   const { data: d } = useSWR<Dashboard>("/api/dashboard", fetcher, { refreshInterval: 30000 });
@@ -71,8 +71,9 @@ export function Sidebar({ user }: { user: User }) {
     setZoomPercent(clamped);
     if (typeof window !== "undefined") {
       localStorage.setItem("sp_ui_zoom", String(clamped));
-      document.documentElement.style.setProperty("--app-zoom", String(clamped / 100));
-      (document.documentElement.style as unknown as Record<string, string>).zoom = `${clamped}%`;
+      const zoom = window.innerWidth < 768 ? 100 : clamped;
+      document.documentElement.style.setProperty("--app-zoom", String(zoom / 100));
+      (document.documentElement.style as unknown as Record<string, string>).zoom = `${zoom}%`;
     }
   }
 
@@ -168,7 +169,11 @@ export function Sidebar({ user }: { user: User }) {
   }
 
   return (
-    <aside className="sidebar-full-height sticky top-0 flex w-[280px] shrink-0 flex-col gap-4 border-r border-line bg-surface px-4 py-5 overflow-visible">
+    <aside className={cn(
+      "sidebar-full-height sticky top-0 z-40 flex w-[280px] shrink-0 flex-col gap-4 border-r border-line bg-surface px-4 py-5 overflow-visible",
+      "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:transition-transform",
+      mobileOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
+    )}>
       <div className="flex items-center gap-3 px-2">
         <div className="relative size-11 overflow-hidden rounded-xl border border-purple-500/40 shadow-[0_0_16px_rgba(168,85,247,0.35)] shrink-0 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -191,6 +196,7 @@ export function Sidebar({ user }: { user: User }) {
             <Link
               key={href}
               href={href}
+              onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex items-center gap-3 rounded-md border border-transparent px-3.5 py-2.5 text-[15px] transition",
