@@ -451,7 +451,17 @@ async def run_live_listener() -> None:
                     pending.cancel()
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
+            from telethon.errors import AuthKeyDuplicatedError
+            if isinstance(exc, AuthKeyDuplicatedError):
+                log.error("telegram session dropped: the same login was used from two places")
+                with SessionLocal() as db:
+                    _save_tg_raw(db, {
+                        "status": "error",
+                        "error": "Сесію Telegram скинуто: акаунт був відкритий з двох місць одночасно. Підключіть його знову лише на сервері.",
+                    })
+                await asyncio.sleep(60)
+                continue
             log.exception("telegram live listener stopped")
         finally:
             if client is not None:

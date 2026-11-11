@@ -87,8 +87,14 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
       "Telegram + ШІ",
       tasksOv?.telegram_state?.status === "connected"
         ? "ТГ підключено"
-        : `${tasksOv?.groups?.filter((g) => g.is_monitored).length ?? 0} груп (ШІ)`,
-      tasksOv?.telegram_state?.status === "connected" ? "var(--success)" : "var(--accent)",
+        : tasksOv?.telegram_state?.status === "error"
+          ? "сесія скинута"
+          : `${tasksOv?.groups?.filter((g) => g.is_monitored).length ?? 0} груп (ШІ)`,
+      tasksOv?.telegram_state?.status === "connected"
+        ? "var(--success)"
+        : tasksOv?.telegram_state?.status === "error"
+          ? "var(--danger)"
+          : "var(--accent)",
     ],
     [
       "AdsPower Bridge",

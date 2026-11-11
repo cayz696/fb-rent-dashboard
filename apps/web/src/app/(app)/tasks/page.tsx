@@ -1291,6 +1291,13 @@ export default function TasksPage() {
                   </span>
                 }
               />
+              {data?.telegram_state?.status === "error" && (
+                <div className="px-5 pt-3">
+                  <ErrorNote>
+                    {data.telegram_state.error || "Telegram відключено."} Нові повідомлення не надходять, доки акаунт не підключити знову у вкладці «Підключення Telegram».
+                  </ErrorNote>
+                </div>
+              )}
               {promoteError && <div className="px-5 pt-3"><ErrorNote>{promoteError}</ErrorNote></div>}
               <div className="divide-y divide-divider">
                 {!data?.recent_messages.length ? (
