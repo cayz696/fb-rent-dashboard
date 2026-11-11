@@ -166,6 +166,11 @@ export default function TasksPage() {
   const [filterCat, setFilterCat] = useState<string>("");
   const [filterPriority, setFilterPriority] = useState<string>("");
   const [filterTeam, setFilterTeam] = useState<string>("");
+  const [newTeamOpen, setNewTeamOpen] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamError, setNewTeamError] = useState("");
+  const [newTeamBusy, setNewTeamBusy] = useState(false);
+  const [newTeamGroupId, setNewTeamGroupId] = useState<string | null>(null);
   const [filterAssignee, setFilterAssignee] = useState<string>("");
 
   // Модальні вікна
@@ -502,6 +507,29 @@ export default function TasksPage() {
       mutate();
     } catch (e) {
       setTgError((e as Error).message);
+    }
+  }
+
+  async function createTeam() {
+    const name = newTeamName.trim();
+    if (!name) return;
+    setNewTeamBusy(true);
+    setNewTeamError("");
+    try {
+      const res = await api<{ id: string }>("/buyers/teams", { method: "POST", body: { name } });
+      if (newTeamGroupId && data) {
+        const group = data.groups.find((g) => g.id === newTeamGroupId);
+        if (group) await api(`/tasks/groups/${group.id}`, { method: "PATCH", body: { team_id: res.id } });
+      }
+      setFilterTeam(res.id);
+      setNewTeamOpen(false);
+      setNewTeamName("");
+      setNewTeamGroupId(null);
+      mutate();
+    } catch (e) {
+      setNewTeamError((e as Error).message);
+    } finally {
+      setNewTeamBusy(false);
     }
   }
 
@@ -926,6 +954,19 @@ export default function TasksPage() {
                 </option>
               ))}
             </Select>
+            {editable && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setNewTeamGroupId(null);
+                  setNewTeamName("");
+                  setNewTeamError("");
+                  setNewTeamOpen(true);
+                }}
+              >
+                <Plus size={14} /> Команда
+              </Button>
+            )}
 
             <Select
               value={filterAssignee}
@@ -1621,6 +1662,7 @@ export default function TasksPage() {
                                       auto_create_tasks: true,
                                     },
                                   });
+                                  await api("/tasks/telegram/sync", { method: "POST", body: {} }).catch(() => undefined);
                                   setDiscoveredDialogs((prev) =>
                                     prev.map((x) => (x.chat_id === d.chat_id ? { ...x, already_added: true } : x)),
                                   );
@@ -1956,18 +1998,33 @@ export default function TasksPage() {
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <Field label="Прив'язка до Команди баєрів">
-                          <Select
-                            value={g.team_id || ""}
-                            disabled={!editable}
-                            onChange={(e) => updateGroupBinding(g, { team_id: e.target.value || null })}
-                          >
-                            <option value="">Без прив'язки до команди</option>
-                            {data?.teams.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </Select>
+                          <div className="flex gap-2">
+                            <Select
+                              value={g.team_id || ""}
+                              disabled={!editable}
+                              onChange={(e) => updateGroupBinding(g, { team_id: e.target.value || null })}
+                            >
+                              <option value="">Без прив'язки до команди</option>
+                              {data?.teams.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </Select>
+                            {editable && (
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setNewTeamGroupId(g.id);
+                                  setNewTeamName("");
+                                  setNewTeamError("");
+                                  setNewTeamOpen(true);
+                                }}
+                              >
+                                <Plus size={14} />
+                              </Button>
+                            )}
+                          </div>
                         </Field>
 
                         <Field label="Відповідальний виконавець за замовчуванням">
@@ -2026,6 +2083,38 @@ export default function TasksPage() {
       )}
 
       {/* Модальне вікно додавання Telegram-групи */}
+      {newTeamOpen && (
+        <Modal
+          title="Нова команда"
+          onClose={() => {
+            setNewTeamOpen(false);
+            setNewTeamGroupId(null);
+          }}
+        >
+          <Field label="Назва команди">
+            <Input
+              value={newTeamName}
+              onChange={(e) => setNewTeamName(e.target.value)}
+              placeholder="Напр. Skull Partners 303"
+              autoFocus
+            />
+          </Field>
+          <p className="text-[12.5px] text-muted">
+            Команда одразу з’являється в цьому списку, у прив’язці Telegram-груп і на сторінці «Юзери та Команди».
+            Повідомлення групи з цією прив’язкою стають задачами команди. Google-таблиця підключається окремо на сторінці юзерів.
+          </p>
+          {newTeamError && <ErrorNote>{newTeamError}</ErrorNote>}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setNewTeamOpen(false)}>
+              Скасувати
+            </Button>
+            <Button variant="primary" onClick={createTeam} disabled={newTeamBusy || !newTeamName.trim()}>
+              Додати команду
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       {addingGroup && data && (
         <AddTelegramGroupModal
           overview={data}

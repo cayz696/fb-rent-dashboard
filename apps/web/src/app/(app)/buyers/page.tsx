@@ -165,7 +165,7 @@ export default function BuyersPage() {
                 Звірити з FBM (24г)
               </Button>
               <Button size="sm" onClick={() => setEditingTeam("new")}>
-                <FileSpreadsheet size={14} />+ Таблиця / Команда
+                <FileSpreadsheet size={14} />+ Команда
               </Button>
               <Button size="sm" variant="primary" onClick={() => setAddingBuyer(true)}>
                 <Plus size={14} />+ Юзер

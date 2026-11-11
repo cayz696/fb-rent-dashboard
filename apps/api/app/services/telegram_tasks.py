@@ -366,7 +366,7 @@ def disconnect_telegram(db: Session) -> Dict[str, Any]:
     return get_telegram_state(db)
 
 
-async def fetch_telegram_dialogs(db: Session, limit: int = 60) -> List[Dict[str, Any]]:
+async def fetch_telegram_dialogs(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
     """Отримує список груп/супергруп із підключеного Telegram-акаунта для додавання в моніторинг."""
     from telethon import TelegramClient
     from telethon.sessions import StringSession
@@ -377,12 +377,14 @@ async def fetch_telegram_dialogs(db: Session, limit: int = 60) -> List[Dict[str,
         raise ValueError("Telegram-акаунт не підключено. Авторизуйтеся у вкладці «Telegram & ШІ».")
 
     existing = {g.chat_id: g for g in db.scalars(select(TelegramGroup)).all()}
-    client = TelegramClient(StringSession(raw["session_string"]), int(raw["api_id"]), str(raw["api_hash"]))
-    await client.connect()
+    live = _live_client
+    owns_client = not (live is not None and live.is_connected())
+    client = live if not owns_client else TelegramClient(StringSession(raw["session_string"]), int(raw["api_id"]), str(raw["api_hash"]))
+    if owns_client:
+        await client.connect()
     try:
-        dialogs = await client.get_dialogs(limit=limit)
         out: List[Dict[str, Any]] = []
-        for d in dialogs:
+        async for d in client.iter_dialogs():
             if not (d.is_group or d.is_channel):
                 continue
             cid = int(d.id)
@@ -399,9 +401,12 @@ async def fetch_telegram_dialogs(db: Session, limit: int = 60) -> List[Dict[str,
                     "is_monitored": existing[cid].is_monitored if cid in existing else False,
                 }
             )
+            if len(out) >= limit:
+                break
         return out
     finally:
-        await client.disconnect()
+        if owns_client:
+            await client.disconnect()
 
 
 def _telegram_client(raw: Dict[str, Any]):
