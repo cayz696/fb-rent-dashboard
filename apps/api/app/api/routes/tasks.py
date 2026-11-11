@@ -105,7 +105,7 @@ class SimulateMessageIn(BaseModel):
 
 class TelegramSendCodeIn(BaseModel):
     api_id: int
-    api_hash: str
+    api_hash: str = ""
     phone: str
 
 

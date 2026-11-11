@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 log = logging.getLogger("fbrent.telegram")
 _ingest_lock = threading.Lock()
 _live_client = None
+_pending_login_client = None
 _chat_entities: dict[int, Any] = {}
 _monitored_ids: set[int] = set()
 _monitored_loaded_at = 0.0
@@ -57,13 +58,39 @@ def _save_tg_raw(db: Session, updates: Dict[str, Any]) -> Dict[str, Any]:
     return cur
 
 
+def _login_error(exc: Exception) -> ValueError:
+    from telethon.errors import FloodWaitError, PhoneCodeExpiredError, PhoneCodeInvalidError
+    if isinstance(exc, PhoneCodeInvalidError):
+        return ValueError("Код неправильний. Надішліть новий і введіть саме його, не приклад 12345.")
+    if isinstance(exc, PhoneCodeExpiredError):
+        return ValueError("Код застарів. Натисніть «Надіслати код» ще раз і введіть новий одразу.")
+    if isinstance(exc, FloodWaitError):
+        return ValueError(f"Telegram просить зачекати {exc.seconds} с перед наступною спробою.")
+    return ValueError(f"Помилка Telegram: {exc}")
+
+
 async def send_login_code(db: Session, api_id: int, api_hash: str, phone: str) -> Dict[str, Any]:
     """Крок 1: Підключення особистого акаунта Telegram через Telethon — відправка коду підтвердження."""
+    global _pending_login_client
     from telethon import TelegramClient
     from telethon.sessions import StringSession
 
     clean_phone = phone.strip()
-    clean_hash = api_hash.strip()
+    clean_hash = (api_hash or "").strip()
+    if not clean_hash:
+        row = db.get(SystemState, TG_STATE_KEY)
+        stored = dict(row.value) if row and row.value else {}
+        clean_hash = str(stored.get("api_hash") or "").strip()
+    if not clean_hash:
+        raise ValueError("Вкажіть API hash з my.telegram.org")
+
+    if _pending_login_client is not None:
+        try:
+            await _pending_login_client.disconnect()
+        except Exception:
+            pass
+        _pending_login_client = None
+
     client = TelegramClient(StringSession(), int(api_id), clean_hash)
     await client.connect()
     try:
@@ -78,30 +105,37 @@ async def send_login_code(db: Session, api_id: int, api_hash: str, phone: str) -
                 "phone": clean_phone,
                 "phone_code_hash": sent.phone_code_hash,
                 "temp_session": temp_session,
+                "session_string": None,
                 "error": None,
             },
         )
+        _pending_login_client = client
         return get_telegram_state(db)
     except Exception as e:
-        _save_tg_raw(db, {"status": "error", "error": str(e), "api_id": int(api_id), "phone": clean_phone})
-        raise ValueError(f"Помилка Telegram API: {e}")
-    finally:
         await client.disconnect()
+        _save_tg_raw(db, {"status": "error", "error": str(e), "api_id": int(api_id), "phone": clean_phone})
+        raise _login_error(e) from e
 
 
 async def verify_login_code(db: Session, code: str, password: Optional[str] = None) -> Dict[str, Any]:
-    """Крок 2: Підтвердження SMS/Telegram-коду та (за потреби) хмарного пароля 2FA."""
+    """Крок 2: Підтвердження коду. Той самий клієнт, що просив код, інакше Telegram його відхиляє."""
+    global _pending_login_client
     from telethon import TelegramClient
     from telethon.errors import SessionPasswordNeededError
     from telethon.sessions import StringSession
 
     row = db.get(SystemState, TG_STATE_KEY)
     raw = dict(row.value) if row and row.value else {}
-    if not raw.get("temp_session") or not raw.get("api_id") or not raw.get("api_hash"):
+    if not raw.get("phone_code_hash") or not raw.get("api_id") or not raw.get("api_hash"):
         raise ValueError("Спочатку запросіть код підтвердження (Крок 1)")
 
-    client = TelegramClient(StringSession(raw["temp_session"]), int(raw["api_id"]), str(raw["api_hash"]))
-    await client.connect()
+    client = _pending_login_client if _pending_login_client is not None and _pending_login_client.is_connected() else None
+    borrowed = client is not None
+    if client is None:
+        if not raw.get("temp_session"):
+            raise ValueError("Код вже недійсний. Надішліть його ще раз.")
+        client = TelegramClient(StringSession(raw["temp_session"]), int(raw["api_id"]), str(raw["api_hash"]))
+        await client.connect()
     try:
         try:
             me = await client.sign_in(
@@ -130,11 +164,17 @@ async def verify_login_code(db: Session, code: str, password: Optional[str] = No
                 "error": None,
             },
         )
-        return get_telegram_state(db)
-    except Exception as e:
-        raise ValueError(str(e))
-    finally:
         await client.disconnect()
+        _pending_login_client = None
+        return get_telegram_state(db)
+    except ValueError:
+        raise
+    except Exception as e:
+        log.warning("telegram verify failed: %s", type(e).__name__)
+        raise _login_error(e) from e
+    finally:
+        if not borrowed and client is not None and client.is_connected() and _pending_login_client is not client:
+            await client.disconnect()
 
 
 def disconnect_telegram(db: Session) -> Dict[str, Any]:

@@ -291,6 +291,13 @@ export default function TasksPage() {
     }
   }
 
+  useEffect(() => {
+    const s = data?.telegram_state;
+    if (!s) return;
+    if (s.api_id) setTgApiId((v) => v || String(s.api_id));
+    if (s.phone) setTgPhone((v) => v || s.phone);
+  }, [data?.telegram_state]);
+
   async function handleSendTgCode() {
     setTgBusy(true);
     setTgError("");
@@ -1564,7 +1571,7 @@ export default function TasksPage() {
                     <Button
                       variant="primary"
                       onClick={handleSendTgCode}
-                      disabled={!editable || tgBusy || !tgApiId || !tgApiHash || !tgPhone}
+                      disabled={!editable || tgBusy || !tgApiId || !tgPhone || (!tgApiHash && !tgState?.has_credentials)}
                       className="w-full"
                     >
                       Надіслати код у Telegram
@@ -1572,15 +1579,16 @@ export default function TasksPage() {
 
                     {tgState?.status === "code_sent" && (
                       <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3.5">
-                        <div className="text-[12.5px] font-semibold text-amber-200">
-                          Крок 2: Введіть код із повідомлення від Telegram
+                        <div className="text-[12.5px] font-semibold text-main">
+                          Крок 2: вставте код, який Telegram щойно надіслав у застосунок. Поле зараз порожнє.
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <Field label="Код підтвердження">
                             <Input
                               value={tgCode}
                               onChange={(e) => setTgCode(e.target.value)}
-                              placeholder="12345"
+                              placeholder="код із Telegram"
+                              autoFocus
                             />
                           </Field>
                           <Field label="Хмарний пароль 2FA (якщо є)">
@@ -1600,6 +1608,9 @@ export default function TasksPage() {
                         >
                           Підтвердити та запустити парсер
                         </Button>
+                        {!tgCode.trim() && (
+                          <p className="text-[12px] text-muted">Кнопка стане активною, коли в полі зліва буде код із Telegram.</p>
+                        )}
                       </div>
                     )}
                   </div>
