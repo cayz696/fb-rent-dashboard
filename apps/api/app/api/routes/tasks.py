@@ -740,6 +740,14 @@ async def tg_send_code(body: TelegramSendCodeIn, db: Session = Depends(get_db), 
         raise HTTPException(400, str(e))
 
 
+@router.post("/telegram/resend-code")
+async def tg_resend_code(db: Session = Depends(get_db), _: User = Depends(can_write)):
+    try:
+        return await telegram_tasks.resend_login_code(db)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @router.post("/telegram/verify-code")
 async def tg_verify_code(body: TelegramVerifyCodeIn, db: Session = Depends(get_db), _: User = Depends(can_write)):
     try:

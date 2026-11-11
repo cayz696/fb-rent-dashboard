@@ -41,8 +41,21 @@ def get_telegram_state(db: Session) -> Dict[str, Any]:
         "account_id": val.get("account_id"),
         "last_sync_at": val.get("last_sync_at"),
         "error": val.get("error"),
+        "code_delivery": val.get("code_delivery"),
         "auto_poll_seconds": int(val.get("auto_poll_seconds", 60)),
     }
+
+
+def _code_where(sent) -> str:
+    name = type(getattr(sent, "type", None)).__name__
+    log.info("telegram login code delivery: %s", name)
+    if name == "SentCodeTypeApp":
+        return "Код не в SMS. Відкрийте на телефоні застосунок Telegram і чат «Telegram» із синьою галочкою — код там."
+    if name == "SentCodeTypeSms":
+        return "Код надіслано SMS на цей номер."
+    if name in ("SentCodeTypeCall", "SentCodeTypeFlashCall", "SentCodeTypeMissedCall"):
+        return "Telegram дзвонить на цей номер. Код — останні цифри номера, з якого дзвонять."
+    return "Перевірте застосунок Telegram: службовий чат «Telegram». Якщо там порожньо, натисніть «Надіслати SMS»."
 
 
 def _save_tg_raw(db: Session, updates: Dict[str, Any]) -> Dict[str, Any]:
@@ -106,6 +119,7 @@ async def send_login_code(db: Session, api_id: int, api_hash: str, phone: str) -
                 "phone_code_hash": sent.phone_code_hash,
                 "temp_session": temp_session,
                 "session_string": None,
+                "code_delivery": _code_where(sent),
                 "error": None,
             },
         )
@@ -115,6 +129,32 @@ async def send_login_code(db: Session, api_id: int, api_hash: str, phone: str) -
         await client.disconnect()
         _save_tg_raw(db, {"status": "error", "error": str(e), "api_id": int(api_id), "phone": clean_phone})
         raise _login_error(e) from e
+
+
+async def resend_login_code(db: Session) -> Dict[str, Any]:
+    """Просить Telegram надіслати код наступним способом, зазвичай SMS."""
+    from telethon.errors import SendCodeUnavailableError
+    from telethon.tl.functions.auth import ResendCodeRequest
+
+    row = db.get(SystemState, TG_STATE_KEY)
+    raw = dict(row.value) if row and row.value else {}
+    client = _pending_login_client if _pending_login_client is not None and _pending_login_client.is_connected() else None
+    if client is None or not raw.get("phone") or not raw.get("phone_code_hash"):
+        raise ValueError("Спочатку натисніть «Надіслати код у Telegram», потім можна запитати SMS.")
+    try:
+        sent = await client(ResendCodeRequest(raw["phone"], raw["phone_code_hash"]))
+    except SendCodeUnavailableError as e:
+        raise ValueError("SMS зараз недоступне. Код лише в застосунку: чат «Telegram» із синьою галочкою.") from e
+    except Exception as e:
+        raise _login_error(e) from e
+    _save_tg_raw(db, {
+        "phone_code_hash": sent.phone_code_hash,
+        "temp_session": client.session.save(),
+        "code_delivery": _code_where(sent),
+        "status": "code_sent",
+        "error": None,
+    })
+    return get_telegram_state(db)
 
 
 async def verify_login_code(db: Session, code: str, password: Optional[str] = None) -> Dict[str, Any]:

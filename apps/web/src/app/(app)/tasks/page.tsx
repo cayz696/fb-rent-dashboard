@@ -1576,6 +1576,32 @@ export default function TasksPage() {
                     >
                       Надіслати код у Telegram
                     </Button>
+                    {tgState?.status === "code_sent" && tgState.code_delivery && (
+                      <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12.5px] text-main">
+                        {tgState.code_delivery}
+                      </div>
+                    )}
+                    {tgState?.status === "code_sent" && (
+                      <Button
+                        variant="ghost"
+                        disabled={!editable || tgBusy}
+                        onClick={async () => {
+                          setTgBusy(true);
+                          setTgError("");
+                          try {
+                            await api("/tasks/telegram/resend-code", { method: "POST", body: {} });
+                            setTgNotice("Запитано інший спосіб доставки. Перевірте SMS і чат «Telegram».");
+                            mutate();
+                          } catch (e) {
+                            setTgError((e as Error).message);
+                          } finally {
+                            setTgBusy(false);
+                          }
+                        }}
+                      >
+                        Надіслати SMS, якщо в застосунку коду немає
+                      </Button>
+                    )}
 
                     {tgState?.status === "code_sent" && (
                       <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3.5">
