@@ -206,7 +206,6 @@ export default function TasksPage() {
   const [tgPassword, setTgPassword] = useState("");
   const [tgBusy, setTgBusy] = useState(false);
   const [tgNotice, setTgNotice] = useState("");
-  const [qrSvg, setQrSvg] = useState("");
   const [tgError, setTgError] = useState("");
   const [discoveredDialogs, setDiscoveredDialogs] = useState<
     { chat_id: number; title: string; username: string | null; chat_type: string; already_added: boolean }[]
@@ -299,36 +298,25 @@ export default function TasksPage() {
     if (s.phone) setTgPhone((v) => v || s.phone);
   }, [data?.telegram_state]);
 
-  useEffect(() => {
-    if (!qrSvg) return;
-    const timer = setInterval(async () => {
-      try {
-        const res = await api<{ svg: string; status: string; needs_password: boolean }>("/tasks/telegram/qr");
-        if (res.status === "connected") {
-          setQrSvg("");
-          setTgNotice("Telegram підключено через QR.");
-          mutate();
-          return;
-        }
-        if (res.svg) setQrSvg(res.svg);
-      } catch {
-        /* QR ще не готовий */
-      }
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [qrSvg, mutate]);
-
-  async function handleStartQr() {
-    setTgBusy(true);
-    setTgError("");
-    setTgNotice("");
+  async function laptopTelegram(path: string, body: Record<string, unknown>) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
     try {
-      const res = await api<{ svg: string }>("/tasks/telegram/qr", { method: "POST", body: {} });
-      setQrSvg(res.svg || "");
-    } catch (e) {
-      setTgError((e as Error).message);
+      const res = await fetch(`http://127.0.0.1:8791${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error((data as { detail?: string }).detail || "Не вдалося з цього ноутбука");
+        (err as Error & { local?: boolean }).local = true;
+        throw err;
+      }
+      return data as { message?: string };
     } finally {
-      setTgBusy(false);
+      clearTimeout(timer);
     }
   }
 
@@ -337,11 +325,18 @@ export default function TasksPage() {
     setTgError("");
     setTgNotice("");
     try {
+      try {
+        const local = await laptopTelegram("/send", { phone: tgPhone });
+        setTgNotice(local.message || "Код надіслано в Telegram на цьому ноутбуці. Відкрийте чат «Telegram».");
+        return;
+      } catch (e) {
+        if ((e as { local?: boolean }).local) throw e;
+      }
       await api("/tasks/telegram/send-code", {
         method: "POST",
         body: { api_id: Number(tgApiId), api_hash: tgApiHash, phone: tgPhone },
       });
-      setTgNotice("Код підтвердження надіслано у ваш Telegram! Введіть його нижче.");
+      setTgNotice("Код надіслано в Telegram, не в SMS. На ноутбуці відкрийте чат «Telegram» із синьою галочкою.");
       mutate();
     } catch (e) {
       setTgError((e as Error).message);
@@ -355,10 +350,19 @@ export default function TasksPage() {
     setTgError("");
     setTgNotice("");
     try {
-      await api("/tasks/telegram/verify-code", {
-        method: "POST",
-        body: { code: tgCode, password: tgPassword || undefined },
-      });
+      let done = false;
+      try {
+        await laptopTelegram("/verify", { code: tgCode.trim(), password: tgPassword });
+        done = true;
+      } catch (e) {
+        if ((e as { local?: boolean }).local) throw e;
+      }
+      if (!done) {
+        await api("/tasks/telegram/verify-code", {
+          method: "POST",
+          body: { code: tgCode, password: tgPassword || undefined },
+        });
+      }
       setTgNotice("Особистий Telegram-акаунт успішно підключено!");
       setTgCode("");
       setTgPassword("");
@@ -1604,59 +1608,25 @@ export default function TasksPage() {
 
                     <Button
                       variant="primary"
-                      onClick={handleStartQr}
-                      disabled={!editable || tgBusy || !tgState?.has_credentials}
-                      className="w-full"
-                    >
-                      Увійти QR-кодом з телефону
-                    </Button>
-                    {qrSvg && (
-                      <div className="space-y-2 rounded-lg border border-line bg-white p-3 text-center">
-                        <div className="text-[12.5px] font-semibold text-slate-900">
-                          На телефоні з Tech Sup: Налаштування → Пристрої → Підключити пристрій, і наведіть камеру на код.
-                        </div>
-                        <div className="mx-auto w-[220px]" dangerouslySetInnerHTML={{ __html: qrSvg }} />
-                      </div>
-                    )}
-                    <Button
-                      variant="ghost"
                       onClick={handleSendTgCode}
                       disabled={!editable || tgBusy || !tgApiId || !tgPhone || (!tgApiHash && !tgState?.has_credentials)}
                       className="w-full"
                     >
                       Надіслати код у Telegram
                     </Button>
+                    <div className="text-[12.5px] text-muted">
+                      Код приходить у Telegram на цьому ноутбуці, у чат «Telegram». Це не SMS.
+                    </div>
                     {tgState?.status === "code_sent" && tgState.code_delivery && (
                       <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12.5px] text-main">
                         {tgState.code_delivery}
                       </div>
                     )}
-                    {tgState?.status === "code_sent" && (
-                      <Button
-                        variant="ghost"
-                        disabled={!editable || tgBusy}
-                        onClick={async () => {
-                          setTgBusy(true);
-                          setTgError("");
-                          try {
-                            await api("/tasks/telegram/resend-code", { method: "POST", body: {} });
-                            setTgNotice("Запитано інший спосіб доставки. Перевірте SMS і чат «Telegram».");
-                            mutate();
-                          } catch (e) {
-                            setTgError((e as Error).message);
-                          } finally {
-                            setTgBusy(false);
-                          }
-                        }}
-                      >
-                        Надіслати SMS, якщо в застосунку коду немає
-                      </Button>
-                    )}
 
-                    {tgState?.status === "code_sent" && (
+                    {(
                       <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3.5">
                         <div className="text-[12.5px] font-semibold text-main">
-                          Крок 2: вставте код, який Telegram щойно надіслав у застосунок. Поле зараз порожнє.
+                          Крок 2: код із чату «Telegram» на цьому ноутбуці. Не з SMS.
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <Field label="Код підтвердження">

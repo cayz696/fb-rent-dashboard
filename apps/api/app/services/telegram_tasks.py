@@ -52,12 +52,12 @@ def _code_where(sent) -> str:
     name = type(getattr(sent, "type", None)).__name__
     log.info("telegram login code delivery: %s", name)
     if name == "SentCodeTypeApp":
-        return "Код не в SMS. Відкрийте на телефоні застосунок Telegram і чат «Telegram» із синьою галочкою — код там."
+        return "Код надіслано в Telegram, не в SMS. На ноутбуці відкрийте чат «Telegram» із синьою галочкою — код там."
     if name == "SentCodeTypeSms":
-        return "Код надіслано SMS на цей номер."
+        return "Telegram сам обрав SMS. Нам потрібен код у застосунку: надішліть код ще раз із цього ноутбука."
     if name in ("SentCodeTypeCall", "SentCodeTypeFlashCall", "SentCodeTypeMissedCall"):
         return "Telegram дзвонить на цей номер. Код — останні цифри номера, з якого дзвонять."
-    return "Перевірте застосунок Telegram: службовий чат «Telegram». Якщо там порожньо, натисніть «Надіслати SMS»."
+    return "Код має прийти в Telegram на ноутбуці, у службовий чат «Telegram». Це не SMS."
 
 
 def _save_tg_raw(db: Session, updates: Dict[str, Any]) -> Dict[str, Any]:
