@@ -234,7 +234,7 @@ export interface TelegramMessageLogItem {
 }
 
 export interface TelegramAccountState {
-  status: "disconnected" | "code_sent" | "connected" | "error";
+  status: "disconnected" | "code_sent" | "connected" | "error" | "qr";
   phone: string; api_id: string | number; api_hash_masked: string; has_credentials: boolean;
   account_name: string | null; account_username: string | null; account_id: number | null;
   last_sync_at: string | null; error: string | null; code_delivery: string | null; auto_poll_seconds: number;

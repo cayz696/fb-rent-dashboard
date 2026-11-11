@@ -207,6 +207,11 @@ export default function TasksPage() {
   const [tgBusy, setTgBusy] = useState(false);
   const [tgNotice, setTgNotice] = useState("");
   const [tgError, setTgError] = useState("");
+  // QR-вхід (надійний спосіб на VPS: код у SMS/застосунок не потрібен)
+  const [qrSvg, setQrSvg] = useState("");
+  const [qrActive, setQrActive] = useState(false);
+  const [qrNeedsPassword, setQrNeedsPassword] = useState(false);
+  const [qrPassword, setQrPassword] = useState("");
   const [discoveredDialogs, setDiscoveredDialogs] = useState<
     { chat_id: number; title: string; username: string | null; chat_type: string; already_added: boolean }[]
   >([]);
@@ -373,6 +378,75 @@ export default function TasksPage() {
       setTgBusy(false);
     }
   }
+
+  async function handleStartQr() {
+    setTgBusy(true);
+    setTgError("");
+    setTgNotice("");
+    setQrNeedsPassword(false);
+    setQrPassword("");
+    try {
+      const res = await api<{ svg: string; active: boolean }>("/tasks/telegram/qr", { method: "POST", body: {} });
+      setQrSvg(res.svg || "");
+      setQrActive(true);
+      setTgNotice("Відкрийте Telegram на телефоні → Налаштування → Пристрої → Підключити пристрій і наведіть камеру на QR-код нижче.");
+    } catch (e) {
+      setTgError((e as Error).message);
+      setQrActive(false);
+    } finally {
+      setTgBusy(false);
+    }
+  }
+
+  async function submitQrPassword() {
+    setTgBusy(true);
+    setTgError("");
+    try {
+      await api("/tasks/telegram/qr/password", { method: "POST", body: { password: qrPassword } });
+      setQrActive(false);
+      setQrNeedsPassword(false);
+      setQrPassword("");
+      setTgNotice("Особистий Telegram-акаунт успішно підключено!");
+      mutate();
+    } catch (e) {
+      setTgError((e as Error).message);
+    } finally {
+      setTgBusy(false);
+    }
+  }
+
+  // Поки показаний QR — опитуємо сервер, доки телефон не підтвердить вхід.
+  useEffect(() => {
+    if (!qrActive) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const res = await api<{ svg: string; active: boolean; needs_password: boolean; status: string }>(
+          "/tasks/telegram/qr",
+        );
+        if (stop) return;
+        if (res.svg) setQrSvg(res.svg);
+        if (res.needs_password) {
+          setQrNeedsPassword(true);
+          return; // чекаємо на пароль 2FA, опитування зупиняємо
+        }
+        if (res.status === "connected") {
+          setQrActive(false);
+          setTgNotice("Особистий Telegram-акаунт успішно підключено!");
+          mutate();
+          return;
+        }
+      } catch {
+        /* тимчасова помилка мережі — спробуємо на наступному такті */
+      }
+    };
+    const id = setInterval(tick, 2500);
+    tick();
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [qrActive, mutate]);
 
   async function handleDisconnectTg() {
     setTgBusy(true);
@@ -1617,6 +1691,61 @@ export default function TasksPage() {
                     <div className="text-[12.5px] text-muted">
                       Код приходить у Telegram на цьому ноутбуці, у чат «Telegram». Це не SMS.
                     </div>
+
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="text-[11px] uppercase tracking-wide text-muted">або</span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      onClick={handleStartQr}
+                      disabled={!editable || tgBusy || !tgApiId || (!tgApiHash && !tgState?.has_credentials)}
+                      className="w-full"
+                    >
+                      Увійти через QR-код (рекомендовано на сервері)
+                    </Button>
+                    <div className="text-[12.5px] text-muted">
+                      На VPS код у чат «Telegram» часто не доходить (Telegram блокує коди із серверних IP). QR-вхід цього не потребує: ви підтверджуєте вхід зі свого телефону.
+                    </div>
+
+                    {qrActive && (
+                      <div className="space-y-3 rounded-lg border border-accent/40 bg-accent/5 p-3.5">
+                        <div className="text-[12.5px] font-semibold text-main">
+                          Відкрийте Telegram на телефоні → Налаштування → Пристрої → «Підключити пристрій» і скануйте QR:
+                        </div>
+                        {qrSvg ? (
+                          <div
+                            className="mx-auto w-[180px] rounded-md bg-white p-2"
+                            dangerouslySetInnerHTML={{ __html: qrSvg }}
+                          />
+                        ) : (
+                          <div className="text-[12.5px] text-muted">Генеруємо QR-код…</div>
+                        )}
+                        {qrNeedsPassword && (
+                          <div className="space-y-2">
+                            <Field label="Хмарний пароль 2FA">
+                              <Input
+                                type="password"
+                                value={qrPassword}
+                                onChange={(e) => setQrPassword(e.target.value)}
+                                placeholder="Пароль двоетапної перевірки"
+                                autoFocus
+                              />
+                            </Field>
+                            <Button
+                              variant="primary"
+                              onClick={submitQrPassword}
+                              disabled={tgBusy || !qrPassword.trim()}
+                              className="w-full"
+                            >
+                              Підтвердити пароль 2FA
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {tgState?.status === "code_sent" && tgState.code_delivery && (
                       <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12.5px] text-main">
                         {tgState.code_delivery}
