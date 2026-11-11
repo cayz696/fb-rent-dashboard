@@ -740,6 +740,31 @@ async def tg_send_code(body: TelegramSendCodeIn, db: Session = Depends(get_db), 
         raise HTTPException(400, str(e))
 
 
+@router.post("/telegram/qr")
+async def tg_qr_start(db: Session = Depends(get_db), _: User = Depends(can_write)):
+    try:
+        return await telegram_tasks.start_qr_login(db)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/telegram/qr")
+def tg_qr_view(_: User = Depends(can_write)):
+    return telegram_tasks.qr_login_view()
+
+
+class TelegramQrPasswordIn(BaseModel):
+    password: str
+
+
+@router.post("/telegram/qr/password")
+async def tg_qr_password(body: TelegramQrPasswordIn, db: Session = Depends(get_db), _: User = Depends(can_write)):
+    try:
+        return await telegram_tasks.finish_qr_password(db, body.password)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @router.post("/telegram/resend-code")
 async def tg_resend_code(db: Session = Depends(get_db), _: User = Depends(can_write)):
     try:

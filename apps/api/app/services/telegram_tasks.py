@@ -13,6 +13,8 @@ log = logging.getLogger("fbrent.telegram")
 _ingest_lock = threading.Lock()
 _live_client = None
 _pending_login_client = None
+_qr_login = None
+_qr_task = None
 _chat_entities: dict[int, Any] = {}
 _monitored_ids: set[int] = set()
 _monitored_loaded_at = 0.0
@@ -129,6 +131,136 @@ async def send_login_code(db: Session, api_id: int, api_hash: str, phone: str) -
         await client.disconnect()
         _save_tg_raw(db, {"status": "error", "error": str(e), "api_id": int(api_id), "phone": clean_phone})
         raise _login_error(e) from e
+
+
+def _store_connected_user(db: Session, client, me) -> None:
+    final_session = client.session.save()
+    full_name = " ".join(filter(None, [getattr(me, "first_name", None), getattr(me, "last_name", None)])) or "Telegram User"
+    _save_tg_raw(
+        db,
+        {
+            "status": "connected",
+            "session_string": final_session,
+            "temp_session": None,
+            "phone_code_hash": None,
+            "qr_url": None,
+            "account_name": full_name,
+            "account_username": getattr(me, "username", None),
+            "account_id": getattr(me, "id", None),
+            "last_sync_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "code_delivery": None,
+            "error": None,
+        },
+    )
+
+
+def qr_login_view() -> Dict[str, Any]:
+    """Поточний QR для входу. Токен не пишеться в журнал."""
+    import segno
+
+    url = None
+    if _qr_login is not None:
+        try:
+            url = _qr_login.url
+        except Exception:
+            url = None
+    svg = ""
+    if url:
+        svg = segno.make(url, error="m").svg_inline(scale=4, dark="#111111", light="#ffffff")
+    needs_password = False
+    with SessionLocal() as db:
+        state = get_telegram_state(db)
+        needs_password = bool(state.get("error") == "qr_password")
+    return {"svg": svg, "active": bool(svg), "needs_password": needs_password, "status": state.get("status")}
+
+
+async def _qr_wait_loop() -> None:
+    global _pending_login_client, _qr_login
+    from telethon.errors import SessionPasswordNeededError
+
+    qr = _qr_login
+    client = _pending_login_client
+    while qr is _qr_login and client is not None:
+        try:
+            me = await qr.wait()
+        except asyncio.TimeoutError:
+            if qr is not _qr_login:
+                return
+            try:
+                await qr.recreate()
+            except Exception:
+                log.exception("telegram qr recreate failed")
+                return
+            continue
+        except SessionPasswordNeededError:
+            with SessionLocal() as db:
+                _save_tg_raw(db, {"error": "qr_password", "status": "qr"})
+            return
+        except Exception:
+            log.exception("telegram qr login failed")
+            with SessionLocal() as db:
+                _save_tg_raw(db, {"status": "error", "error": "QR-вхід перервано. Спробуйте ще раз.", "qr_url": None})
+            return
+        with SessionLocal() as db:
+            _store_connected_user(db, client, me)
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+        if _pending_login_client is client:
+            _pending_login_client = None
+        _qr_login = None
+        return
+
+
+async def start_qr_login(db: Session) -> Dict[str, Any]:
+    """Вхід без коду: телефон, де вже відкритий цей акаунт, сканує QR."""
+    global _pending_login_client, _qr_login, _qr_task
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+
+    row = db.get(SystemState, TG_STATE_KEY)
+    raw = dict(row.value) if row and row.value else {}
+    if not raw.get("api_id") or not raw.get("api_hash"):
+        raise ValueError("Спочатку збережіть API ID і API hash кнопкою «Надіслати код».")
+
+    if _pending_login_client is not None:
+        try:
+            await _pending_login_client.disconnect()
+        except Exception:
+            pass
+        _pending_login_client = None
+    _qr_login = None
+
+    client = TelegramClient(StringSession(), int(raw["api_id"]), str(raw["api_hash"]))
+    await client.connect()
+    try:
+        qr = await client.qr_login()
+    except Exception as e:
+        await client.disconnect()
+        raise _login_error(e) from e
+    _pending_login_client = client
+    _qr_login = qr
+    _save_tg_raw(db, {"status": "qr", "error": None, "qr_url": "1"})
+    _qr_task = asyncio.create_task(_qr_wait_loop())
+    return qr_login_view()
+
+
+async def finish_qr_password(db: Session, password: str) -> Dict[str, Any]:
+    global _pending_login_client, _qr_login
+    client = _pending_login_client
+    if client is None or not client.is_connected():
+        raise ValueError("QR вже недійсний. Покажіть код ще раз.")
+    try:
+        me = await client.sign_in(password=password)
+    except Exception as e:
+        raise _login_error(e) from e
+    _store_connected_user(db, client, me)
+    await client.disconnect()
+    _qr_login = None
+    if _pending_login_client is client:
+        _pending_login_client = None
+    return get_telegram_state(db)
 
 
 async def resend_login_code(db: Session) -> Dict[str, Any]:
