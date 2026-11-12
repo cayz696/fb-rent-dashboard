@@ -1091,7 +1091,7 @@ export default function TasksPage() {
                       quickStatusChange(task, col.key);
                     }}
                     className={cn(
-                      "flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-inset/60 p-3 transition",
+                      "flex min-w-0 flex-col rounded-xl border border-line bg-inset/60 p-3 transition",
                       dragId && dragOverCol === col.key && "border-accent bg-accent/5 ring-2 ring-accent/40",
                     )}
                   >
@@ -1152,7 +1152,7 @@ export default function TasksPage() {
                                 setSelectedTaskId(task.id);
                               }}
                               className={cn(
-                                "group relative flex min-w-0 cursor-pointer flex-col gap-2.5 overflow-hidden rounded-lg border border-line-strong bg-surface p-3.5 transition hover:border-accent hover:shadow-[0_6px_24px_rgba(0,0,0,0.45)]",
+                                "group relative flex min-w-0 cursor-pointer flex-col gap-2.5 break-words rounded-lg border border-line-strong bg-surface p-3.5 transition [overflow-wrap:anywhere] hover:border-accent hover:shadow-[0_6px_24px_rgba(0,0,0,0.45)]",
                                 editable && "cursor-grab active:cursor-grabbing",
                                 dragId === task.id && "opacity-40",
                               )}

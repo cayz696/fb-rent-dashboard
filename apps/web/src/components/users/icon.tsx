@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export type UserIconKey =
@@ -157,16 +158,40 @@ export function AssigneePicker({
   onChange: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [box, setBox] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const current = users.find((user) => user.id === value) ?? null;
 
   useEffect(() => {
     if (!open) return;
-    function close(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    function place() {
+      const el = rootRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const margin = 8;
+      const want = 224;
+      const below = window.innerHeight - rect.bottom - margin;
+      const above = rect.top - margin;
+      const openUp = below < 160 && above > below;
+      const maxHeight = Math.max(96, Math.min(want, openUp ? above : below));
+      const top = openUp ? Math.max(margin, rect.top - 4 - maxHeight) : rect.bottom + 4;
+      setBox({ left: rect.left, top, width: rect.width, maxHeight });
     }
+    function close(event: MouseEvent) {
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    place();
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
   }, [open]);
 
   return (
@@ -186,8 +211,12 @@ export function AssigneePicker({
         )}
         <span className="min-w-0 flex-1 truncate">{current?.name ?? "Не призначено"}</span>
       </button>
-      {open && !disabled && (
-        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 max-h-56 overflow-y-auto rounded-lg border border-line-strong bg-surface p-1 shadow-[0_12px_32px_rgba(0,0,0,0.28)]">
+      {open && !disabled && box && createPortal(
+        <div
+          ref={menuRef}
+          style={{ left: box.left, top: box.top, width: box.width, maxHeight: box.maxHeight }}
+          className="fixed z-[80] overflow-y-auto rounded-lg border border-line-strong bg-surface p-1 shadow-[0_12px_32px_rgba(0,0,0,0.28)]"
+        >
           <button
             type="button"
             onClick={() => {
@@ -216,7 +245,8 @@ export function AssigneePicker({
               <span className="truncate">{user.name}</span>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
