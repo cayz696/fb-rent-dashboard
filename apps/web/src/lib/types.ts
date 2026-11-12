@@ -190,8 +190,19 @@ export interface TeamTaskItem {
     qty?: number | null; geo?: string | null; limit?: string | null; context_used?: number;
     thread_messages?: TelegramThreadMessage[];
   };
+  chat_context?: TaskChatLine[];
   comments: TaskCommentItem[];
   due_at: string | null; completed_at: string | null; created_at: string; updated_at: string;
+}
+
+export interface TaskChatLine {
+  id: number;
+  sender_username: string | null;
+  sender_name: string | null;
+  is_support: boolean;
+  raw_text: string;
+  sent_at: string | null;
+  is_trigger: boolean;
 }
 
 export interface TelegramThreadMessage {

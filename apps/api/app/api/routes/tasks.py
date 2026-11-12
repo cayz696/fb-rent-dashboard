@@ -128,12 +128,57 @@ class AiConfigUpdateIn(BaseModel):
 # Серіалізатори
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _chat_context_by_task(db: Session, tasks: List[TeamTask]) -> Dict[uuid.UUID, List[Dict[str, Any]]]:
+    """Кілька реплік чату перед коротким повідомленням, з якого зібрана задача."""
+    ids = [t.id for t in tasks if t.source == "telegram"]
+    if not ids:
+        return {}
+    anchors = list(db.scalars(select(TelegramMessageLog).where(TelegramMessageLog.task_id.in_(ids))).all())
+    by_task: Dict[uuid.UUID, TelegramMessageLog] = {}
+    for row in anchors:
+        if row.task_id and row.task_id not in by_task:
+            by_task[row.task_id] = row
+    if not by_task:
+        return {}
+    times = [row.sent_at for row in by_task.values() if row.sent_at]
+    chat_ids = {row.chat_id for row in by_task.values()}
+    q = select(TelegramMessageLog).where(TelegramMessageLog.chat_id.in_(chat_ids))
+    if times:
+        q = q.where(TelegramMessageLog.sent_at >= min(times) - dt.timedelta(days=2))
+        q = q.where(TelegramMessageLog.sent_at <= max(times) + dt.timedelta(minutes=1))
+    rows = list(
+        db.scalars(q.order_by(TelegramMessageLog.chat_id, TelegramMessageLog.sent_at, TelegramMessageLog.id)).all()
+    )
+    by_chat: Dict[int, List[TelegramMessageLog]] = {}
+    for row in rows:
+        by_chat.setdefault(row.chat_id, []).append(row)
+    out: Dict[uuid.UUID, List[Dict[str, Any]]] = {}
+    for task_id, anchor in by_task.items():
+        seq = by_chat.get(anchor.chat_id, [])
+        idx = next((i for i, row in enumerate(seq) if row.id == anchor.id), None)
+        window = [anchor] if idx is None else seq[max(0, idx - 4) : idx + 1]
+        out[task_id] = [
+            {
+                "id": row.id,
+                "sender_username": row.sender_username,
+                "sender_name": row.sender_name,
+                "is_support": task_ai_parser.is_support_sender(row.sender_username, row.sender_name),
+                "raw_text": row.raw_text,
+                "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                "is_trigger": row.id == anchor.id,
+            }
+            for row in window
+        ]
+    return out
+
+
 def _serialize_task(
     t: TeamTask,
     users_map: Dict[uuid.UUID, User],
     teams_map: Dict[uuid.UUID, Team],
     buyers_map: Dict[uuid.UUID, Buyer],
     clients_map: Dict[uuid.UUID, Client],
+    chat_context: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     assignee = users_map.get(t.assignee_id) if t.assignee_id else None
     creator = users_map.get(t.creator_id) if t.creator_id else None
@@ -172,6 +217,7 @@ def _serialize_task(
         "checklist_done": done_cnt,
         "checklist_total": len(chk),
         "ai_context": t.ai_context or {},
+        "chat_context": chat_context or [],
         "comments": t.comments or [],
         "due_at": t.due_at.isoformat() if t.due_at else None,
         "completed_at": t.completed_at.isoformat() if t.completed_at else None,
@@ -308,9 +354,13 @@ def get_tasks_overview(
     recent_logs = db.scalars(select(TelegramMessageLog).order_by(TelegramMessageLog.sent_at.desc(), TelegramMessageLog.id.desc()).limit(60)).all()
     threads = telegram_tasks.build_conversation_threads(db, groups, tasks_by_id)
 
+    chat_context = _chat_context_by_task(db, filtered)
     return {
         "stats": stats,
-        "tasks": [_serialize_task(t, users_map, teams_map, buyers_map, clients_map) for t in filtered],
+        "tasks": [
+            _serialize_task(t, users_map, teams_map, buyers_map, clients_map, chat_context.get(t.id))
+            for t in filtered
+        ],
         "groups": [_serialize_group(g, teams_map, clients_map, users_map) for g in groups],
         "threads": threads,
         "recent_messages": [_serialize_log(l, tasks_by_id) for l in recent_logs],

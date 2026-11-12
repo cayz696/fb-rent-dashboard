@@ -1077,34 +1077,10 @@ export default function TasksPage() {
                               <div className="text-[14px] font-semibold leading-snug text-main group-hover:text-accent-light">
                                 {task.title}
                               </div>
-
-                              {/* Останні повідомлення діалогу або оригінальна цитата з Telegram */}
-                              {ctx.thread_messages && ctx.thread_messages.length > 0 ? (
-                                <div className="space-y-1 rounded-md border border-line bg-inset p-2 text-[11.5px]">
-                                  <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">
-                                    Контекст діалогу ({ctx.thread_messages.length} повід.):
-                                  </div>
-                                  {ctx.thread_messages.slice(-3).map((tm) => (
-                                    <div key={tm.id} className="line-clamp-2 leading-snug">
-                                      <span
-                                        className={cn(
-                                          "font-semibold",
-                                          tm.is_support ? "text-emerald-400" : "text-accent",
-                                        )}
-                                      >
-                                        {tm.is_support ? "🛠 Саппорт: " : `👤 @${tm.sender_username || tm.sender_name || "Клієнт"}: `}
-                                      </span>
-                                      <span className="text-muted">{tm.raw_text}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                task.raw_source_text && (
-                                  <div className="line-clamp-3 whitespace-pre-wrap rounded border-l-2 border-purple-500/50 bg-inset px-2.5 py-1.5 text-[12px] italic text-muted">
-                                    «{task.raw_source_text}»
-                                  </div>
-                                )
+                              {task.description && task.description.trim() !== task.title.trim() && (
+                                <div className="line-clamp-3 text-[12.5px] leading-snug text-muted">{task.description}</div>
                               )}
+                              <TaskChatContext task={task} />
 
                               {/* Extracted AI entities tags */}
                               <div className="flex flex-wrap gap-1.5 text-[11px]">
@@ -1265,6 +1241,14 @@ export default function TasksPage() {
                         <td className="px-4 py-3 font-mono font-bold text-accent">{task.code}</td>
                         <td className="max-w-md px-4 py-3">
                           <div className="font-semibold text-main">{task.title}</div>
+                          {task.description && task.description.trim() !== task.title.trim() && (
+                            <div className="mt-0.5 line-clamp-2 text-[12px] text-muted">{task.description}</div>
+                          )}
+                          {(task.chat_context || []).filter((line) => !line.is_trigger).slice(-1).map((line) => (
+                            <div key={line.id} className="mt-0.5 truncate text-[11.5px] text-faint">
+                              Перед цим: {line.raw_text}
+                            </div>
+                          ))}
                           {task.telegram_chat_title && (
                             <div className="mt-0.5 truncate text-[11.5px] text-faint">
                               💬 {task.telegram_chat_title} · {task.telegram_sender}
@@ -2149,6 +2133,48 @@ function UsersGroupIcon() {
 /* ─────────────────────────────────────────────────────────────────────────────
    Модальне вікно перегляду та редагування задачі (Чекліст, ШІ-контекст, Коментарі)
    ───────────────────────────────────────────────────────────────────────────── */
+function TaskChatContext({ task }: { task: TeamTaskItem }) {
+  const ctx = task.ai_context || {};
+  const fromThread = (ctx.thread_messages || []).map((tm) => ({
+    id: tm.id,
+    sender_username: tm.sender_username,
+    sender_name: tm.sender_name,
+    is_support: tm.is_support,
+    raw_text: tm.raw_text,
+    sent_at: tm.sent_at,
+    is_trigger: false,
+  }));
+  const lines = fromThread.length > 1 ? fromThread : task.chat_context || [];
+  if (!lines.length) {
+    if (!task.raw_source_text) return null;
+    return (
+      <div className="whitespace-pre-wrap rounded border-l-2 border-purple-500/50 bg-inset px-2.5 py-1.5 text-[12px] text-muted">
+        «{task.raw_source_text}»
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1 rounded-md border border-line bg-inset p-2 text-[12px]">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">Що було в чаті</div>
+      {lines.map((line) => (
+        <div
+          key={line.id}
+          className={cn(
+            "rounded px-1.5 py-1 leading-snug",
+            line.is_trigger ? "bg-accent/10" : "",
+          )}
+        >
+          <span className={cn("font-semibold", line.is_support ? "text-emerald-400" : "text-accent")}>
+            {line.is_support ? "Саппорт" : line.sender_name || (line.sender_username ? `@${line.sender_username}` : "Клієнт")}
+            {line.is_trigger ? " · це задача" : ""}:{" "}
+          </span>
+          <span className={line.is_trigger ? "text-main" : "text-muted"}>{line.raw_text}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TaskDetailModal({
   task,
   overview,
@@ -2217,6 +2243,10 @@ function TaskDetailModal({
   return (
     <Modal title={`${task.code} — ${task.title}`} onClose={onClose} width="max-w-3xl">
       <div className="max-h-[80vh] space-y-5 overflow-y-auto pr-1">
+        {task.description && task.description.trim() !== task.title.trim() && (
+          <p className="text-[13.5px] leading-relaxed text-main">{task.description}</p>
+        )}
+        {!ctx.thread_messages?.length && <TaskChatContext task={task} />}
         {/* Top Metadata Grid */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Field label="Статус">
@@ -2368,7 +2398,7 @@ function TaskDetailModal({
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : task.chat_context?.length ? null : (
               task.raw_source_text && (
                 <div className="whitespace-pre-wrap rounded-md border border-line bg-inset p-3 text-[13px] text-main">
                   <div className="mb-1 font-mono text-[11px] text-accent">
