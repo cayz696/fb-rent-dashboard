@@ -312,7 +312,7 @@ def _serialize_log(l: TelegramMessageLog, tasks_map: Dict[uuid.UUID, TeamTask]) 
         "reply_to_msg_id": l.reply_to_msg_id,
         "sender_username": l.sender_username,
         "sender_name": l.sender_name,
-        "raw_text": l.raw_text,
+        "raw_text": _preview_chat_text(l.raw_text or "", limit=400),
         "message_link": l.message_link,
         "is_actionable": l.is_actionable,
         "ai_intent": l.ai_intent,

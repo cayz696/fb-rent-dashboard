@@ -1455,9 +1455,9 @@ export default function TasksPage() {
           TAB 2: ПОТІК ПОВІДОМЛЕНЬ З TELEGRAM & ШІ-СИМУЛЯТОР
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "stream" && (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-12">
           {/* Ліва колонка: Тестер / Симулятор ШІ-Парсера */}
-          <div className="space-y-4 xl:col-span-5">
+          <div className="min-w-0 space-y-4 xl:col-span-5">
             <Card>
               <CardHeader
                 title="ШІ-Парсер контексту повідомлень"
@@ -1569,8 +1569,8 @@ export default function TasksPage() {
           </div>
 
           {/* Права колонка: Живий потік повідомлень з Telegram */}
-          <div className="xl:col-span-7">
-            <Card>
+          <div className="min-w-0 overflow-hidden xl:col-span-7">
+            <Card className="min-w-0 overflow-hidden">
               <CardHeader
                 title="Потік повідомлень із робочих груп Telegram"
                 icon={<MessageSquare size={17} className="text-sky-400" />}
@@ -1588,7 +1588,7 @@ export default function TasksPage() {
                 </div>
               )}
               {promoteError && <div className="px-5 pt-3"><ErrorNote>{promoteError}</ErrorNote></div>}
-              <div className="divide-y divide-divider">
+              <div className="min-w-0 divide-y divide-divider">
                 {!data?.recent_messages.length ? (
                   <Empty>Повідомлень із груп поки немає</Empty>
                 ) : (
@@ -1598,7 +1598,7 @@ export default function TasksPage() {
                         ? CATEGORY_META[msg.ai_intent as TaskCategory]
                         : null;
                     return (
-                      <div key={msg.id} className="flex flex-col gap-2 p-4 transition hover:bg-surface-hover/50">
+                      <div key={msg.id} className="flex min-w-0 flex-col gap-2 overflow-hidden p-4 transition hover:bg-surface-hover/50">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
                             <span className="rounded bg-inset px-2 py-0.5 text-[11.5px] font-semibold text-main">
@@ -1650,7 +1650,12 @@ export default function TasksPage() {
                           </div>
                         </div>
 
-                        <div className="min-w-0 break-words rounded-md bg-inset px-3 py-2 text-[13px] text-main [overflow-wrap:anywhere]">{msg.raw_text}</div>
+                        <div
+                          className="min-w-0 overflow-hidden rounded-md bg-inset px-3 py-2 text-[13px] leading-snug text-main"
+                          style={{ overflowWrap: "anywhere" }}
+                        >
+                          {previewChatText(msg.raw_text, 400)}
+                        </div>
 
                         {intentCat && (
                           <div className="flex flex-wrap items-center gap-2 text-[11.5px]">
@@ -1661,8 +1666,8 @@ export default function TasksPage() {
                               Категорія ШІ: {intentCat.label}
                             </span>
                             {Boolean((msg.ai_extracted as Record<string, unknown>)?.reasoning) && (
-                              <span className="text-faint">
-                                {String((msg.ai_extracted as Record<string, unknown>)?.reasoning)}
+                              <span className="min-w-0 text-faint" style={{ overflowWrap: "anywhere" }}>
+                                {previewChatText(String((msg.ai_extracted as Record<string, unknown>)?.reasoning || ""), 240)}
                               </span>
                             )}
                           </div>
@@ -2280,13 +2285,13 @@ function UsersGroupIcon() {
 /* ─────────────────────────────────────────────────────────────────────────────
    Модальне вікно перегляду та редагування задачі (Чекліст, ШІ-контекст, Коментарі)
    ───────────────────────────────────────────────────────────────────────────── */
-function previewChatText(raw: string): string {
+function previewChatText(raw: string, limit = 160): string {
   let text = (raw || "").replace(/\s+/g, " ").trim();
   const hadSecret = /EAA[A-Za-z0-9]{12,}/.test(text) || /[A-Za-z0-9+/=_-]{60,}/.test(text);
   text = text.replace(/EAA[A-Za-z0-9]{12,}/g, "••••").replace(/[A-Za-z0-9+/=_-]{60,}/g, "••••");
   text = text.replace(/(?:••••\s*){2,}/g, "•••• ").trim();
   if (hadSecret && text.replace(/[•\s.]/g, "").length < 16) return "надіслав токени";
-  if (text.length > 160) return `${text.slice(0, 160).trimEnd()}…`;
+  if (limit > 0 && text.length > limit) return `${text.slice(0, limit).trimEnd()}…`;
   return text;
 }
 
