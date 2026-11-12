@@ -809,7 +809,7 @@ export default function TasksPage() {
         <div className="space-y-5">
           {/* Блок: Останні повідомлення та контекст по гілках Telegram для свідомої постановки задач */}
           {boardScope === "active" && (data?.threads?.length ?? 0) > 0 && (
-            <div className="panel space-y-3.5 p-4">
+            <div className="panel min-w-0 space-y-3.5 overflow-hidden p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Bot size={18} className="text-purple-400" />
@@ -835,7 +835,7 @@ export default function TasksPage() {
               </div>
 
               {threadsOpen && (
-              <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-2">
                 {(showAllThreads ? data?.threads ?? [] : openThreads).length === 0 && (
                   <Empty>Усі розмови вже мають задачу або вирішені в чаті</Empty>
                 )}
@@ -851,13 +851,13 @@ export default function TasksPage() {
                   return (
                     <div
                       key={th.thread_key}
-                      className="flex flex-col justify-between gap-3 rounded-xl border border-line-strong bg-inset/70 p-3.5"
+                      className="flex min-w-0 flex-col justify-between gap-3 overflow-hidden rounded-xl border border-line-strong bg-inset/70 p-3.5 [overflow-wrap:anywhere]"
                     >
-                      <div className="space-y-2.5">
+                      <div className="min-w-0 space-y-2.5">
                         {/* Шапка діалогу */}
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                            <span className="rounded bg-surface px-2 py-0.5 font-semibold text-main">
+                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12px]">
+                            <span className="min-w-0 break-words rounded bg-surface px-2 py-0.5 font-semibold text-main">
                               💬 {th.chat_title}
                               {th.topic_id ? ` · Гілка #${th.topic_id}` : ""}
                             </span>
@@ -872,9 +872,9 @@ export default function TasksPage() {
                         </div>
 
                         {/* ШІ-висновок по всій гілці */}
-                        <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 px-3 py-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[13.5px] font-semibold text-main">{th.suggested_title}</span>
+                        <div className="min-w-0 overflow-hidden rounded-lg border border-purple-500/30 bg-purple-500/5 px-3 py-2">
+                          <div className="flex min-w-0 items-start justify-between gap-2">
+                            <span className="min-w-0 break-words text-[13.5px] font-semibold text-main [overflow-wrap:anywhere]">{th.suggested_title}</span>
                             <span
                               className="shrink-0 rounded px-2 py-0.5 text-[10.5px] font-medium"
                               style={{ color: cat.color, background: cat.bg }}
@@ -882,11 +882,11 @@ export default function TasksPage() {
                               {cat.label}
                             </span>
                           </div>
-                          <div className="mt-1 text-[12px] text-muted">{th.context_summary}</div>
+                          <div className="mt-1 break-words text-[12px] text-muted [overflow-wrap:anywhere]">{th.context_summary}</div>
                         </div>
 
                         {/* Стрічка останніх повідомлень цього діалогу */}
-                        <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-line bg-surface p-2.5 text-[12px]">
+                        <div className="max-h-44 min-w-0 space-y-1.5 overflow-x-hidden overflow-y-auto rounded-lg border border-line bg-surface p-2.5 text-[12px]">
                           <div className="text-[10.5px] font-semibold uppercase tracking-wider text-faint">
                             Останні повідомлення діалогу ({th.messages_count}):
                           </div>
@@ -900,14 +900,14 @@ export default function TasksPage() {
                                   : "border-l-2 border-accent bg-inset text-main",
                               )}
                             >
-                              <div className="flex items-center justify-between text-[10.5px]">
-                                <span className={cn("font-semibold", m.is_support ? "text-emerald-400" : "text-accent")}>
+                              <div className="flex min-w-0 items-center justify-between gap-2 text-[10.5px]">
+                                <span className={cn("min-w-0 truncate font-semibold", m.is_support ? "text-emerald-400" : "text-accent")}>
                                   {m.is_support
                                     ? `🛠 Саппорт (${m.sender_name || m.sender_username || "SP"})`
                                     : `👤 Клієнт (@${m.sender_username || m.sender_name || "user"})`}
                                 </span>
                                 {m.sent_at && (
-                                  <span className="font-mono text-faint">
+                                  <span className="shrink-0 font-mono text-faint">
                                     {new Date(m.sent_at).toLocaleTimeString("uk-UA", { timeZone: "Europe/Kyiv",
                                       hour: "2-digit",
                                       minute: "2-digit",
@@ -915,7 +915,7 @@ export default function TasksPage() {
                                   </span>
                                 )}
                               </div>
-                              <div className="mt-0.5 whitespace-pre-wrap break-words text-[12px] leading-snug">
+                              <div className="mt-0.5 whitespace-pre-wrap break-words text-[12px] leading-snug [overflow-wrap:anywhere]">
                                 {m.raw_text.length > 220 ? m.raw_text.slice(0, 220) + "…" : m.raw_text}
                               </div>
                             </div>
@@ -924,8 +924,8 @@ export default function TasksPage() {
                       </div>
 
                       {/* Нижня панель дій по діалогу */}
-                      <div className="flex items-center justify-between gap-2 border-t border-divider pt-2">
-                        <div className="flex flex-wrap gap-1.5 text-[11px]">
+                      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-divider pt-2">
+                        <div className="flex min-w-0 flex-wrap gap-1.5 text-[11px]">
                           {th.buyer_tag && (
                             <span className="rounded border border-line-strong bg-surface px-2 py-0.5 font-mono text-main">
                               👤 {th.buyer_tag}
@@ -944,13 +944,13 @@ export default function TasksPage() {
                         {th.linked_task_id && th.linked_task_code ? (
                           <button
                             onClick={() => setSelectedTaskId(th.linked_task_id)}
-                            className="cursor-pointer rounded-md border border-accent bg-accent/15 px-3 py-1 font-mono text-[12px] font-bold text-accent hover:bg-accent/25"
+                            className="shrink-0 cursor-pointer rounded-md border border-accent bg-accent/15 px-3 py-1 font-mono text-[12px] font-bold text-accent hover:bg-accent/25"
                           >
                             Відкрити {th.linked_task_code} →
                           </button>
                         ) : (
                           editable && (
-                            <Button size="sm" variant="primary" onClick={() => setThreadForTask(th)}>
+                            <Button size="sm" variant="primary" className="shrink-0" onClick={() => setThreadForTask(th)}>
                               <Plus size={14} /> Поставити задачу з контексту
                             </Button>
                           )
@@ -1650,7 +1650,7 @@ export default function TasksPage() {
                           </div>
                         </div>
 
-                        <div className="rounded-md bg-inset px-3 py-2 text-[13px] text-main">{msg.raw_text}</div>
+                        <div className="min-w-0 break-words rounded-md bg-inset px-3 py-2 text-[13px] text-main [overflow-wrap:anywhere]">{msg.raw_text}</div>
 
                         {intentCat && (
                           <div className="flex flex-wrap items-center gap-2 text-[11.5px]">
@@ -2565,7 +2565,7 @@ function TaskDetailModal({
                         </span>
                       )}
                     </div>
-                    <div className="mt-0.5 whitespace-pre-wrap break-words">{tm.raw_text}</div>
+                    <div className="mt-0.5 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{tm.raw_text}</div>
                   </div>
                 ))}
               </div>
@@ -3048,7 +3048,7 @@ function CreateTaskFromThreadModal({
                     </span>
                   )}
                 </div>
-                <div className="mt-0.5 whitespace-pre-wrap break-words">{m.raw_text}</div>
+                <div className="mt-0.5 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.raw_text}</div>
               </div>
             ))}
           </div>
