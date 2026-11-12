@@ -2,6 +2,7 @@ from __future__ import annotations
 """API Задачника команди, інтеграції з особистим Telegram-акаунтом (MTProto) та ШІ-парсера контексту."""
 import datetime as dt
 import logging
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -128,6 +129,44 @@ class AiConfigUpdateIn(BaseModel):
 # Серіалізатори
 # ─────────────────────────────────────────────────────────────────────────────
 
+_TOKEN_RE = re.compile(r"EAA[A-Za-z0-9]{12,}")
+_LONG_SECRET_RE = re.compile(r"[A-Za-z0-9+/=_-]{60,}")
+_SECRET_RUN_RE = re.compile(r"(?:••••\s*){2,}")
+_SECRET_LEFT_RE = re.compile(r"[•\s.]")
+
+
+def _preview_chat_text(text: str, limit: int = 160) -> str:
+    """На картці не показуємо простирадла токенів і довгі ключі."""
+    raw = " ".join((text or "").split())
+    had_secret = bool(_TOKEN_RE.search(raw) or _LONG_SECRET_RE.search(raw))
+    raw = _TOKEN_RE.sub("••••", raw)
+    raw = _LONG_SECRET_RE.sub("••••", raw)
+    raw = _SECRET_RUN_RE.sub("•••• ", raw).strip()
+    if had_secret and len(_SECRET_LEFT_RE.sub("", raw)) < 16:
+        return "надіслав токени"
+    if len(raw) > limit:
+        return raw[:limit].rstrip() + "…"
+    return raw
+
+
+def _public_ai_context(ctx: Dict[str, Any] | None) -> Dict[str, Any]:
+    if not ctx:
+        return {}
+    out = dict(ctx)
+    messages = out.get("thread_messages")
+    if isinstance(messages, list):
+        cleaned = []
+        for item in messages:
+            if isinstance(item, dict):
+                copy = dict(item)
+                copy["raw_text"] = _preview_chat_text(str(copy.get("raw_text") or ""))
+                cleaned.append(copy)
+            else:
+                cleaned.append(item)
+        out["thread_messages"] = cleaned
+    return out
+
+
 def _chat_context_by_task(db: Session, tasks: List[TeamTask]) -> Dict[uuid.UUID, List[Dict[str, Any]]]:
     """Кілька реплік чату перед коротким повідомленням, з якого зібрана задача."""
     ids = [t.id for t in tasks if t.source == "telegram"]
@@ -157,18 +196,23 @@ def _chat_context_by_task(db: Session, tasks: List[TeamTask]) -> Dict[uuid.UUID,
         seq = by_chat.get(anchor.chat_id, [])
         idx = next((i for i, row in enumerate(seq) if row.id == anchor.id), None)
         window = [anchor] if idx is None else seq[max(0, idx - 4) : idx + 1]
-        out[task_id] = [
-            {
-                "id": row.id,
-                "sender_username": row.sender_username,
-                "sender_name": row.sender_name,
-                "is_support": task_ai_parser.is_support_sender(row.sender_username, row.sender_name),
-                "raw_text": row.raw_text,
-                "sent_at": row.sent_at.isoformat() if row.sent_at else None,
-                "is_trigger": row.id == anchor.id,
-            }
-            for row in window
-        ]
+        lines: List[Dict[str, Any]] = []
+        for row in window:
+            text = _preview_chat_text(row.raw_text or "")
+            if lines and text == "надіслав токени" and lines[-1]["raw_text"] == "надіслав токени":
+                continue
+            lines.append(
+                {
+                    "id": row.id,
+                    "sender_username": row.sender_username,
+                    "sender_name": row.sender_name,
+                    "is_support": task_ai_parser.is_support_sender(row.sender_username, row.sender_name),
+                    "raw_text": text,
+                    "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                    "is_trigger": row.id == anchor.id,
+                }
+            )
+        out[task_id] = lines
     return out
 
 
@@ -216,7 +260,7 @@ def _serialize_task(
         "checklist": chk,
         "checklist_done": done_cnt,
         "checklist_total": len(chk),
-        "ai_context": t.ai_context or {},
+        "ai_context": _public_ai_context(t.ai_context or {}),
         "chat_context": chat_context or [],
         "comments": t.comments or [],
         "due_at": t.due_at.isoformat() if t.due_at else None,

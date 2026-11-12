@@ -1091,7 +1091,7 @@ export default function TasksPage() {
                       quickStatusChange(task, col.key);
                     }}
                     className={cn(
-                      "flex flex-col rounded-xl border border-line bg-inset/60 p-3 transition",
+                      "flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-inset/60 p-3 transition",
                       dragId && dragOverCol === col.key && "border-accent bg-accent/5 ring-2 ring-accent/40",
                     )}
                   >
@@ -1152,7 +1152,7 @@ export default function TasksPage() {
                                 setSelectedTaskId(task.id);
                               }}
                               className={cn(
-                                "group relative flex cursor-pointer flex-col gap-2.5 rounded-lg border border-line-strong bg-surface p-3.5 transition hover:border-accent hover:shadow-[0_6px_24px_rgba(0,0,0,0.45)]",
+                                "group relative flex min-w-0 cursor-pointer flex-col gap-2.5 overflow-hidden rounded-lg border border-line-strong bg-surface p-3.5 transition hover:border-accent hover:shadow-[0_6px_24px_rgba(0,0,0,0.45)]",
                                 editable && "cursor-grab active:cursor-grabbing",
                                 dragId === task.id && "opacity-40",
                               )}
@@ -1198,7 +1198,7 @@ export default function TasksPage() {
                               {task.description && task.description.trim() !== task.title.trim() && (
                                 <div className="line-clamp-3 text-[12.5px] leading-snug text-muted">{task.description}</div>
                               )}
-                              <TaskChatContext task={task} />
+                              <TaskChatContext task={task} compact />
 
                               {/* Extracted AI entities tags */}
                               <div className="flex flex-wrap gap-1.5 text-[11px]">
@@ -1378,7 +1378,7 @@ export default function TasksPage() {
                           )}
                           {(task.chat_context || []).filter((line) => !line.is_trigger).slice(-1).map((line) => (
                             <div key={line.id} className="mt-0.5 truncate text-[11.5px] text-faint">
-                              Перед цим: {line.raw_text}
+                              Перед цим: {previewChatText(line.raw_text)}
                             </div>
                           ))}
                           {task.telegram_chat_title && (
@@ -2280,7 +2280,17 @@ function UsersGroupIcon() {
 /* ─────────────────────────────────────────────────────────────────────────────
    Модальне вікно перегляду та редагування задачі (Чекліст, ШІ-контекст, Коментарі)
    ───────────────────────────────────────────────────────────────────────────── */
-function TaskChatContext({ task }: { task: TeamTaskItem }) {
+function previewChatText(raw: string): string {
+  let text = (raw || "").replace(/\s+/g, " ").trim();
+  const hadSecret = /EAA[A-Za-z0-9]{12,}/.test(text) || /[A-Za-z0-9+/=_-]{60,}/.test(text);
+  text = text.replace(/EAA[A-Za-z0-9]{12,}/g, "••••").replace(/[A-Za-z0-9+/=_-]{60,}/g, "••••");
+  text = text.replace(/(?:••••\s*){2,}/g, "•••• ").trim();
+  if (hadSecret && text.replace(/[•\s.]/g, "").length < 16) return "надіслав токени";
+  if (text.length > 160) return `${text.slice(0, 160).trimEnd()}…`;
+  return text;
+}
+
+function TaskChatContext({ task, compact = false }: { task: TeamTaskItem; compact?: boolean }) {
   const ctx = task.ai_context || {};
   const fromThread = (ctx.thread_messages || []).map((tm) => ({
     id: tm.id,
@@ -2291,23 +2301,37 @@ function TaskChatContext({ task }: { task: TeamTaskItem }) {
     sent_at: tm.sent_at,
     is_trigger: false,
   }));
-  const lines = fromThread.length > 1 ? fromThread : task.chat_context || [];
+  let lines = fromThread.length > 1 ? fromThread : task.chat_context || [];
+  lines = lines.map((line) => ({ ...line, raw_text: previewChatText(line.raw_text) }));
+  if (compact) {
+    const folded: typeof lines = [];
+    for (const line of lines) {
+      const prev = folded[folded.length - 1];
+      if (prev && !line.is_trigger && !prev.is_trigger && prev.raw_text === line.raw_text && line.raw_text === "надіслав токени") {
+        continue;
+      }
+      folded.push(line);
+    }
+    const trigger = folded.filter((line) => line.is_trigger);
+    const rest = folded.filter((line) => !line.is_trigger).slice(-2);
+    lines = [...rest, ...trigger];
+  }
   if (!lines.length) {
     if (!task.raw_source_text) return null;
     return (
-      <div className="whitespace-pre-wrap rounded border-l-2 border-purple-500/50 bg-inset px-2.5 py-1.5 text-[12px] text-muted">
-        «{task.raw_source_text}»
+      <div className="break-words rounded border-l-2 border-purple-500/50 bg-inset px-2.5 py-1.5 text-[12px] text-muted [overflow-wrap:anywhere]">
+        «{previewChatText(task.raw_source_text)}»
       </div>
     );
   }
   return (
-    <div className="space-y-1 rounded-md border border-line bg-inset p-2 text-[12px]">
+    <div className="space-y-1 overflow-hidden rounded-md border border-line bg-inset p-2 text-[12px]">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">Що було в чаті</div>
       {lines.map((line) => (
         <div
           key={line.id}
           className={cn(
-            "rounded px-1.5 py-1 leading-snug",
+            "break-words rounded px-1.5 py-1 leading-snug [overflow-wrap:anywhere]",
             line.is_trigger ? "bg-accent/10" : "",
           )}
         >
