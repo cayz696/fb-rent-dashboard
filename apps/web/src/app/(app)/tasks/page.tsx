@@ -1105,6 +1105,11 @@ export default function TasksPage() {
                                     BM: {ctx.bm_id.slice(0, 10)}…
                                   </span>
                                 )}
+                                {ctx.spend_signal && (
+                                  <span className="rounded border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 font-semibold text-emerald-300">
+                                    Пріоритет: {ctx.spend_signal.reason} · сьогодні ${ctx.spend_signal.today}
+                                  </span>
+                                )}
                                 {ctx.qty && (
                                   <span className="rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.5 font-mono text-sky-300">
                                     {ctx.qty} шт {ctx.geo ? `· ${ctx.geo}` : ""} {ctx.limit ? `· $${ctx.limit}` : ""}

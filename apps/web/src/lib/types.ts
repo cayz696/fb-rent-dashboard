@@ -188,6 +188,7 @@ export interface TeamTaskItem {
     confidence?: number; engine?: string; reasoning?: string; suggested_reply?: string | null;
     account_codes?: string[]; card_last4?: string[]; ad_account_ids?: string[]; bm_id?: string | null;
     qty?: number | null; geo?: string | null; limit?: string | null; context_used?: number;
+    spend_signal?: { today: string; yesterday: string; reason: string } | null;
     thread_messages?: TelegramThreadMessage[];
   };
   chat_context?: TaskChatLine[];

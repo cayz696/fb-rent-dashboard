@@ -8,8 +8,13 @@ from collections import defaultdict, deque
 
 log = logging.getLogger("fbrent")
 
+from datetime import timedelta
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+
+from app.core.config import settings
+from app.core.security import COOKIE, make_token, read_token, token_remaining
 
 from app.api.routes import accounts, adspower, auth, bridge, buyers, catalog, clover, dashboard, fbm, finance, imports, notifications, reports, requests, system, tasks, users
 from app.core.db import SessionLocal
@@ -93,7 +98,19 @@ async def rate_limit(request: Request, call_next):
         if len(q) >= limit:
             return JSONResponse({"detail": "Забагато спроб, зачекайте хвилину"}, status_code=429)
         q.append(now)
-    return await call_next(request)
+    response = await call_next(request)
+    token = request.cookies.get(COOKIE)
+    if token and response.status_code < 400:
+        left = token_remaining(token, "session")
+        ttl = timedelta(hours=settings.session_ttl_hours)
+        if left is not None and timedelta(0) < left < ttl - timedelta(days=1):
+            uid = read_token(token, "session")
+            if uid is not None:
+                response.set_cookie(
+                    COOKIE, make_token(uid, "session", ttl), max_age=int(ttl.total_seconds()),
+                    httponly=True, samesite="lax", secure=settings.cookie_secure, path="/",
+                )
+    return response
 
 
 @app.get("/api/health")

@@ -456,6 +456,7 @@ def record_card_spends(db: Session, refresh_fbm: bool = False) -> dict:
     else:
         db.add(SystemState(key=TRACKER_STATE_KEY, value=tracker_state))
 
+    sync_spend_priority(db)
     db.commit()
     return {
         "recorded_at": now.isoformat(),
@@ -713,6 +714,113 @@ def sync_team_sheet_csv(db: Session, team: Team, csv_content: str) -> dict:
         "topup_total": team.topup_total,
         "spend_total_sheet": team.spend_total_sheet,
     }
+
+
+AUTO_PRIORITY_KEY = "buyer_auto_priority"
+
+
+def _day_spend(rows_by_date: dict[date, BuyerDailySpend], day: date) -> Decimal:
+    row = rows_by_date.get(day)
+    if row is None:
+        return Decimal("0")
+    if row.spend_fbm is not None:
+        return Decimal(row.spend_fbm)
+    return Decimal(row.spend_sheet or 0)
+
+
+def heat_reason(today: Decimal, yesterday: Decimal, day2: Decimal, day3: Decimal) -> str | None:
+    """Чому баєра треба підняти: витрати ростуть або після паузи різко пішли."""
+    recent = today + yesterday
+    prior = day2 + day3
+    if today >= Decimal("50") and today > yesterday and today >= yesterday * Decimal("1.25"):
+        return "витрати ростуть"
+    if prior <= Decimal("40") and recent >= Decimal("100") and recent > prior:
+        return "після паузи різко пішов спенд"
+    return None
+
+
+def spend_heat_map(db: Session) -> dict[uuid.UUID, dict]:
+    today = today_kyiv()
+    start = today - timedelta(days=3)
+    rows = db.scalars(select(BuyerDailySpend).where(BuyerDailySpend.date >= start)).all()
+    by_buyer: dict[uuid.UUID, dict[date, BuyerDailySpend]] = {}
+    for row in rows:
+        by_buyer.setdefault(row.buyer_id, {})[row.date] = row
+    heat: dict[uuid.UUID, dict] = {}
+    for buyer_id, days in by_buyer.items():
+        d0 = _day_spend(days, today)
+        d1 = _day_spend(days, today - timedelta(days=1))
+        d2 = _day_spend(days, today - timedelta(days=2))
+        d3 = _day_spend(days, today - timedelta(days=3))
+        reason = heat_reason(d0, d1, d2, d3)
+        if not reason:
+            continue
+        heat[buyer_id] = {
+            "today": str(d0.quantize(Decimal("0.01"))),
+            "yesterday": str(d1.quantize(Decimal("0.01"))),
+            "reason": reason,
+        }
+    return heat
+
+
+def match_buyer_in_text(db: Session, text: str, team_id: uuid.UUID | None = None) -> Buyer | None:
+    """Шукає ім'я баєра в тексті чату. Якщо група прив'язана до команди — спочатку її люди."""
+    blob = (text or "").lower()
+    if len(blob.strip()) < 3:
+        return None
+    buyers = list(db.scalars(select(Buyer)).all())
+    pool = [b for b in buyers if team_id and b.team_id == team_id] or buyers
+    best: Buyer | None = None
+    best_len = 0
+    for buyer in pool:
+        name = (buyer.name or "").strip().lower()
+        if len(name) < 3 or name not in blob:
+            continue
+        if len(name) > best_len:
+            best = buyer
+            best_len = len(name)
+    return best
+
+
+def mark_buyer_hot(db: Session, buyer: Buyer) -> None:
+    buyer.is_priority = True
+    state = db.get(SystemState, AUTO_PRIORITY_KEY)
+    ids = list(state.value.get("ids") or []) if state and isinstance(state.value, dict) else []
+    sid = str(buyer.id)
+    if sid not in ids:
+        ids.append(sid)
+    payload = {"ids": ids}
+    if state:
+        state.value = payload
+    else:
+        db.add(SystemState(key=AUTO_PRIORITY_KEY, value=payload))
+
+
+def sync_spend_priority(db: Session) -> dict[uuid.UUID, dict]:
+    """Ставить пріоритет тим, у кого спенд росте, і знімає його, коли хвиля спала."""
+    heat = spend_heat_map(db)
+    hot = set(heat)
+    state = db.get(SystemState, AUTO_PRIORITY_KEY)
+    prev_raw = state.value.get("ids") if state and isinstance(state.value, dict) else []
+    prev: set[uuid.UUID] = set()
+    for item in prev_raw or []:
+        try:
+            prev.add(uuid.UUID(str(item)))
+        except ValueError:
+            continue
+    if hot:
+        for buyer in db.scalars(select(Buyer).where(Buyer.id.in_(hot))).all():
+            buyer.is_priority = True
+    cooled = prev - hot
+    if cooled:
+        for buyer in db.scalars(select(Buyer).where(Buyer.id.in_(cooled))).all():
+            buyer.is_priority = False
+    payload = {"ids": [str(item) for item in hot]}
+    if state:
+        state.value = payload
+    else:
+        db.add(SystemState(key=AUTO_PRIORITY_KEY, value=payload))
+    return heat
 
 
 def fetch_and_sync_team_sheet(db: Session, team: Team) -> dict:

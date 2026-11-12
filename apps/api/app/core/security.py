@@ -35,13 +35,27 @@ def make_token(user_id: uuid.UUID, purpose: str, ttl: timedelta) -> str:
 
 
 def read_token(token: str, purpose: str) -> uuid.UUID | None:
-    try:
-        data = jwt.decode(token, settings.secret_key, algorithms=[ALGO])
-    except jwt.PyJWTError:
-        return None
-    if data.get("purpose") != purpose:
+    data = _decode(token)
+    if not data or data.get("purpose") != purpose:
         return None
     return uuid.UUID(data["sub"])
+
+
+def token_remaining(token: str, purpose: str) -> timedelta | None:
+    data = _decode(token)
+    if not data or data.get("purpose") != purpose:
+        return None
+    exp = data.get("exp")
+    if not isinstance(exp, (int, float)):
+        return None
+    return datetime.fromtimestamp(exp, timezone.utc) - datetime.now(timezone.utc)
+
+
+def _decode(token: str) -> dict | None:
+    try:
+        return jwt.decode(token, settings.secret_key, algorithms=[ALGO])
+    except jwt.PyJWTError:
+        return None
 
 
 def new_totp_secret() -> str:

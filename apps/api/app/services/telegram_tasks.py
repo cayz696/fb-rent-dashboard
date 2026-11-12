@@ -696,6 +696,25 @@ async def run_live_listener() -> None:
 # Єдиний конвеєр парсингу повідомлення -> Лог -> TeamTask
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _buyer_heat(db: Session, buyer_id: Optional[uuid.UUID], team_id: Optional[uuid.UUID], text: str):
+    """Прив'язує баєра за ім'ям у чаті і піднімає його, якщо спенд росте."""
+    from app.services.buyers_sync import mark_buyer_hot, match_buyer_in_text, spend_heat_map
+
+    if buyer_id is None:
+        found = match_buyer_in_text(db, text, team_id)
+        if found is not None:
+            buyer_id = found.id
+    if buyer_id is None:
+        return None, None
+    info = spend_heat_map(db).get(buyer_id)
+    if not info:
+        return buyer_id, None
+    buyer = db.get(Buyer, buyer_id)
+    if buyer is not None:
+        mark_buyer_hot(db, buyer)
+    return buyer_id, info
+
+
 def ingest_message(
     db: Session,
     group: TelegramGroup,
@@ -836,12 +855,16 @@ def ingest_message(
         t_id = uuid.UUID(ents["team_id"]) if ents.get("team_id") else group.team_id
         c_id = uuid.UUID(ents["client_id"]) if ents.get("client_id") else group.client_id
 
+        priority = ai_result.get("priority", "medium")
+        b_id, heat = _buyer_heat(db, b_id, t_id, f"{raw_text}\n{sender_name or ''}\n{sender_username or ''}")
+        if heat and priority in ("low", "medium", None, ""):
+            priority = "high"
         created_task = TeamTask(
             title=ai_result.get("title") or raw_text[:100],
             description=ai_result.get("description"),
             raw_source_text=raw_text,
             status="inbox",
-            priority=ai_result.get("priority", "medium"),
+            priority=priority,
             category=ai_result.get("category", "general"),
             source="telegram",
             telegram_group_id=group.id,
@@ -865,12 +888,16 @@ def ingest_message(
                 "geo": ents.get("geo"),
                 "limit": ents.get("limit"),
                 "context_used": len(context_messages),
+                "spend_signal": heat,
             },
             comments=[
                 {
                     "id": str(uuid.uuid4())[:8],
                     "author": "ШІ-Диспетчер",
-                    "text": f"Задачу автоматично виділено з групи «{group.title}» (впевненість ШІ: {ai_result.get('confidence', 85)}%). {ai_result.get('reasoning', '')}",
+                    "text": (
+                        f"Задачу автоматично виділено з групи «{group.title}» (впевненість ШІ: {ai_result.get('confidence', 85)}%). {ai_result.get('reasoning', '')}"
+                        + (f" Пріоритет піднято: {heat['reason']} (сьогодні ${heat['today']}, вчора ${heat['yesterday']})." if heat else "")
+                    ),
                     "created_at": now.isoformat(),
                 }
             ],
@@ -1100,6 +1127,10 @@ def create_task_from_thread(
     final_cat = category or thread["category"]
     final_prio = priority or thread["priority"]
     final_buyer_id = buyer_id or (uuid.UUID(thread["buyer_id"]) if thread.get("buyer_id") else None)
+    blob = "\n".join((m.get("raw_text") or "") for m in msgs[-8:])
+    final_buyer_id, heat = _buyer_heat(db, final_buyer_id, team_id or (group_obj.team_id if group_obj else None), blob)
+    if heat and final_prio in ("low", "medium", None, ""):
+        final_prio = "high"
     final_team_id = team_id or (uuid.UUID(thread["team_id"]) if thread.get("team_id") else (group_obj.team_id if group_obj else None))
     final_client_id = uuid.UUID(thread["client_id"]) if thread.get("client_id") else (group_obj.client_id if group_obj else None)
     final_assignee = assignee_id or (group_obj.default_assignee_id if group_obj else creator.id)
@@ -1146,6 +1177,7 @@ def create_task_from_thread(
             "geo": ents.get("geo"),
             "limit": ents.get("limit"),
             "context_used": len(msgs),
+            "spend_signal": heat,
         },
         comments=[
             {

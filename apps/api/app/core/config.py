@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     app_tz: str = "Europe/Kyiv"
     secret_key: str
-    session_ttl_hours: int = 12
+    session_ttl_hours: int = 720
     database_url: str
     cookie_secure: bool = False
     clover_spend_secret: str = ""
