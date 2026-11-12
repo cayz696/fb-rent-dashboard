@@ -4,7 +4,7 @@ export type Stage =
 export type OffReason = "ban" | "reserve" | "paused" | "returned" | "written_off";
 export type Role = "admin" | "operator" | "viewer";
 
-export interface User { id: string; username: string; name: string; role: Role; allowed_sections?: string[] | null; theme?: "dark" | "light" }
+export interface User { id: string; username: string; name: string; role: Role; allowed_sections?: string[] | null; theme?: "dark" | "light"; icon?: string | null }
 
 export interface Account {
   id: string; code: string; stage: Stage; off_reason: OffReason | null;
@@ -49,7 +49,7 @@ export interface RequestItem {
   parsed: { qty?: number; geo?: string | null; limit?: string | null; shortage?: number; source?: string } | null;
   status: RequestStatus; proposed: { id: string; code: string; stage: Stage }[]; approved_by_name: string | null; created_at: string;
 }
-export interface UserAdmin { id: string; username: string; name: string; role: Role; is_active: boolean; totp_enabled: boolean; allowed_sections?: string[] | null; created_at: string }
+export interface UserAdmin { id: string; username: string; name: string; role: Role; is_active: boolean; totp_enabled: boolean; allowed_sections?: string[] | null; icon?: string | null; created_at: string }
 export interface Unmatched { ad_account_id: string; spend_today: string | null; spend_total: string | null; snapshots: number; last_received: string }
 export interface CloverStatus { last_received: string | null; stale: boolean; snapshots: number; unmatched: number }
 export interface SpendPoint { date: string; spend: string | null }
@@ -270,7 +270,7 @@ export interface TasksOverview {
   recent_messages: TelegramMessageLogItem[];
   telegram_state: TelegramAccountState;
   ai_config: TasksAiConfig;
-  users: { id: string; name: string; username: string; role: string }[];
+  users: { id: string; name: string; username: string; role: string; icon?: string | null }[];
   teams: { id: string; name: string }[];
   buyers: { id: string; name: string; team_id: string | null }[];
   clients: { id: string; name: string }[];

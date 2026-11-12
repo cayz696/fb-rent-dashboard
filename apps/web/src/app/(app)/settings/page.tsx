@@ -2,6 +2,7 @@
 import { Check, Download, GitBranch, HardDrive, Laptop, Plus, RefreshCw, Shield } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
+import { IconPicker, UserBadge, type UserIconKey } from "@/components/users/icon";
 import { Button, Card, CardHeader, Empty, ErrorNote, Field, Input, Modal, PageHeader, Select } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
 import { ALL_SECTIONS, hasSectionAccess, isAdmin, useMe } from "@/lib/session";
@@ -49,6 +50,7 @@ function Users({ meId }: { meId: string }) {
   const [creating, setCreating] = useState(false);
   const [pwFor, setPwFor] = useState<UserAdmin | null>(null);
   const [sectionsFor, setSectionsFor] = useState<UserAdmin | null>(null);
+  const [iconFor, setIconFor] = useState<UserAdmin | null>(null);
   const [error, setError] = useState("");
 
   async function patch(u: UserAdmin, body: object) {
@@ -66,7 +68,12 @@ function Users({ meId }: { meId: string }) {
           {data?.map((u) => (
             <tr key={u.id} className="border-b border-divider last:border-0">
               <td className="px-5 py-3 font-mono">{u.username}</td>
-              <td className="px-5 py-3">{u.name}</td>
+              <td className="px-5 py-3">
+                <button type="button" onClick={() => setIconFor(u)} className="inline-flex cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 hover:bg-surface-hover" title="Обрати іконку">
+                  <UserBadge userId={u.id} icon={u.icon} size={15} />
+                  <span>{u.name}</span>
+                </button>
+              </td>
               <td className="px-5 py-3">
                 <Select className="h-8 w-32" value={u.role} onChange={(e) => patch(u, { role: e.target.value })} aria-label={`Роль ${u.username}`}>
                   {(Object.keys(ROLES) as Role[]).map((r) => <option key={r} value={r}>{ROLES[r]}</option>)}
@@ -103,6 +110,18 @@ function Users({ meId }: { meId: string }) {
       {creating && <CreateUser onClose={() => setCreating(false)} onDone={() => { setCreating(false); mutate(); }} />}
       {pwFor && <Password u={pwFor} onClose={() => setPwFor(null)} onDone={() => { setPwFor(null); mutate(); }} />}
       {sectionsFor && <EditSectionsModal u={sectionsFor} onClose={() => setSectionsFor(null)} onDone={() => { setSectionsFor(null); mutate(); }} />}
+      {iconFor && (
+        <Modal title={`Іконка: ${iconFor.name}`} onClose={() => setIconFor(null)} width="max-w-md">
+          <p className="text-[12.5px] text-muted">Ця іконка стоїть біля людини на картках задачника.</p>
+          <IconPicker
+            value={iconFor.icon}
+            onPick={async (key: UserIconKey) => {
+              await patch(iconFor, { icon: key });
+              setIconFor(null);
+            }}
+          />
+        </Modal>
+      )}
     </Card>
   );
 }

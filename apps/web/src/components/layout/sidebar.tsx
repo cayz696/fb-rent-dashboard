@@ -30,6 +30,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
 import { NotificationsBell } from "@/components/layout/notifications";
+import { IconPicker, UserBadge, type UserIconKey } from "@/components/users/icon";
+import { Modal } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
 import { hasSectionAccess, isAdmin } from "@/lib/session";
 import type { BridgeStatus, Dashboard, FbmCards, SystemStatus, TasksOverview, User } from "@/lib/types";
@@ -56,6 +58,7 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
   const [updatingGit, setUpdatingGit] = useState(false);
   const [gitMsg, setGitMsg] = useState("");
   const [zoomPercent, setZoomPercent] = useState(100);
+  const [iconOpen, setIconOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -311,13 +314,21 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
         </div>
 
         <div className="flex items-center justify-between rounded-lg px-2 text-[13px]">
-          <div className="min-w-0">
-            <div className="truncate font-medium">{user.name}</div>
-            <div className="font-mono text-[11px] text-faint">
-              {user.role}
-              {user.allowed_sections?.length ? ` · ${user.allowed_sections.length} розд.` : ""}
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIconOpen(true)}
+            title="Обрати свою іконку"
+            className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-surface-hover"
+          >
+            <UserBadge userId={user.id} icon={user.icon} size={16} />
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{user.name}</span>
+              <span className="block font-mono text-[11px] text-faint">
+                {user.role}
+                {user.allowed_sections?.length ? ` · ${user.allowed_sections.length} розд.` : ""}
+              </span>
+            </span>
+          </button>
           <div className="flex items-center gap-1">
             <NotificationsBell />
             <button
@@ -331,6 +342,19 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
           </div>
         </div>
       </div>
+      {iconOpen && (
+        <Modal title="Ваша іконка" onClose={() => setIconOpen(false)} width="max-w-md">
+          <p className="text-[12.5px] text-muted">Її видно біля вашого імені, коли на вас призначають задачу.</p>
+          <IconPicker
+            value={user.icon}
+            onPick={async (key: UserIconKey) => {
+              const updated = await api<User>("/me/icon", { method: "PATCH", body: { icon: key } });
+              globalMutate("/api/me", updated, false);
+              setIconOpen(false);
+            }}
+          />
+        </Modal>
+      )}
     </aside>
   );
 }

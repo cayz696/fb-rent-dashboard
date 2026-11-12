@@ -40,6 +40,7 @@ class UserOut(ORM):
     role: Role
     allowed_sections: list[str] | None = None
     theme: str = "dark"
+    icon: str | None = None
 
 
 # ---- suppliers / batches / clients
@@ -215,6 +216,7 @@ class UserAdminOut(ORM):
     is_active: bool
     totp_enabled: bool
     allowed_sections: list[str] | None = None
+    icon: str | None = None
     created_at: datetime
 
 
@@ -224,6 +226,7 @@ class UserCreate(BaseModel):
     role: Role
     password: str = Field(min_length=8)
     allowed_sections: list[str] | None = None
+    icon: str | None = None
 
 
 class UserPatch(BaseModel):
@@ -233,6 +236,7 @@ class UserPatch(BaseModel):
     password: str | None = Field(default=None, min_length=8)
     reset_2fa: bool = False
     allowed_sections: list[str] | None = None
+    icon: str | None = None
 
 
 # ---- requests

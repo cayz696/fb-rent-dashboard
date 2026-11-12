@@ -33,6 +33,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { AssigneePicker, UserBadge } from "@/components/users/icon";
 import { Button, Card, CardHeader, Chip, Empty, ErrorNote, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
 import { canWrite, isAdmin, useMe } from "@/lib/session";
@@ -1259,57 +1260,64 @@ export default function TasksPage() {
                               {/* Bottom controls: Assignee + Quick Action */}
                               <div
                                 data-no-drag
-                                className="mt-1 flex items-center justify-between gap-2 border-t border-divider pt-2.5"
+                                className="mt-1 space-y-2 border-t border-divider pt-2.5"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <select
-                                  value={task.assignee_id || ""}
-                                  onChange={(e) => quickAssignChange(task, e.target.value)}
-                                  className="max-w-[140px] truncate rounded border border-line bg-inset px-2 py-1 text-[11.5px] text-muted outline-none focus:border-accent"
-                                >
-                                  <option value="">Не призначено</option>
-                                  {data?.users.map((u) => (
-                                    <option key={u.id} value={u.id}>
-                                      👤 {u.name}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                <div className="flex items-center gap-1">
-                                  {task.category === "issue_accounts" && !task.linked_request_id && (
-                                    <button
-                                      onClick={() => handleConvertToRequest(task)}
-                                      title="Створити Заявку на видачу та автоматично підібрати Ready-акаунти"
-                                      className="cursor-pointer rounded border border-sky-500/40 bg-sky-500/15 px-2 py-1 text-[11px] font-semibold text-sky-300 hover:bg-sky-500/25"
-                                    >
-                                      → У Заявку
-                                    </button>
-                                  )}
-                                  {status === "inbox" && (
-                                    <button
-                                      onClick={() => quickStatusChange(task, "in_progress")}
-                                      className="cursor-pointer rounded border border-line-strong bg-surface-hover px-2 py-1 text-[11px] font-medium text-main hover:border-accent"
-                                    >
-                                      В роботу →
-                                    </button>
-                                  )}
-                                  {status === "todo" && (
-                                    <button
-                                      onClick={() => quickStatusChange(task, "in_progress")}
-                                      className="cursor-pointer rounded border border-line-strong bg-surface-hover px-2 py-1 text-[11px] font-medium text-main hover:border-accent"
-                                    >
-                                      Почати →
-                                    </button>
-                                  )}
-                                  {status === "in_progress" && (
-                                    <button
-                                      onClick={() => quickStatusChange(task, "done")}
-                                      className="cursor-pointer rounded border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/25"
-                                    >
-                                      ✓ Готово
-                                    </button>
-                                  )}
-                                </div>
+                                <AssigneePicker
+                                  users={data?.users ?? []}
+                                  value={task.assignee_id}
+                                  disabled={!editable}
+                                  onChange={(id) => quickAssignChange(task, id)}
+                                />
+                                {(task.category === "issue_accounts" && !task.linked_request_id) ||
+                                status === "inbox" ||
+                                status === "todo" ||
+                                status === "in_progress" ? (
+                                  <div
+                                    className={cn(
+                                      "grid gap-1.5",
+                                      task.category === "issue_accounts" &&
+                                        !task.linked_request_id &&
+                                        (status === "inbox" || status === "todo" || status === "in_progress")
+                                        ? "grid-cols-2"
+                                        : "grid-cols-1",
+                                    )}
+                                  >
+                                    {task.category === "issue_accounts" && !task.linked_request_id && (
+                                      <button
+                                        onClick={() => handleConvertToRequest(task)}
+                                        title="Створити заявку на видачу та підібрати Ready-акаунти"
+                                        className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-sky-500/40 bg-sky-500/15 px-2 text-[12px] font-semibold text-sky-300 transition hover:bg-sky-500/25"
+                                      >
+                                        У заявку
+                                      </button>
+                                    )}
+                                    {status === "inbox" && (
+                                      <button
+                                        onClick={() => quickStatusChange(task, "in_progress")}
+                                        className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-2 text-[12px] font-semibold text-main transition hover:border-accent"
+                                      >
+                                        В роботу
+                                      </button>
+                                    )}
+                                    {status === "todo" && (
+                                      <button
+                                        onClick={() => quickStatusChange(task, "in_progress")}
+                                        className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-2 text-[12px] font-semibold text-main transition hover:border-accent"
+                                      >
+                                        Почати
+                                      </button>
+                                    )}
+                                    {status === "in_progress" && (
+                                      <button
+                                        onClick={() => quickStatusChange(task, "done")}
+                                        className="inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2 text-[12px] font-semibold text-emerald-300 transition hover:bg-emerald-500/25"
+                                      >
+                                        Готово
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
                           );
@@ -1398,7 +1406,20 @@ export default function TasksPage() {
                         <td className="px-4 py-3 font-mono text-[12px] text-muted">
                           {task.checklist_done}/{task.checklist_total}
                         </td>
-                        <td className="px-4 py-3 text-muted">{task.assignee_name || "Не призначено"}</td>
+                        <td className="px-4 py-3 text-muted">
+                          {task.assignee_id ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <UserBadge
+                                userId={task.assignee_id}
+                                icon={data?.users.find((u) => u.id === task.assignee_id)?.icon}
+                                size={13}
+                              />
+                              {task.assignee_name || "Не призначено"}
+                            </span>
+                          ) : (
+                            "Не призначено"
+                          )}
+                        </td>
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <Select
                             value={task.status}

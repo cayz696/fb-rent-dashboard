@@ -366,7 +366,7 @@ def get_tasks_overview(
         "recent_messages": [_serialize_log(l, tasks_by_id) for l in recent_logs],
         "telegram_state": telegram_tasks.get_telegram_state(db),
         "ai_config": task_ai_parser.public_ai_config(db),
-        "users": [{"id": str(u.id), "name": u.name, "username": u.username, "role": u.role.value} for u in users_map.values()],
+        "users": [{"id": str(u.id), "name": u.name, "username": u.username, "role": u.role.value, "icon": u.icon} for u in users_map.values()],
         "teams": [{"id": str(t.id), "name": t.name} for t in teams_map.values()],
         "buyers": [{"id": str(b.id), "name": b.name, "team_id": str(b.team_id) if b.team_id else None} for b in buyers_map.values()],
         "clients": [{"id": str(c.id), "name": c.name} for c in clients_map.values()],

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import admin_only, require_section
 from app.core.db import get_db
 from app.core.security import hash_password
+from app.core.user_icons import USER_ICON_KEYS
 from app.models import Role, User
 from app.schemas.api import UserAdminOut, UserCreate, UserPatch
 
@@ -27,12 +28,15 @@ def list_users(db: Session = Depends(get_db), _: User = Depends(admin_only)):
 def create_user(body: UserCreate, db: Session = Depends(get_db), _: User = Depends(admin_only)):
     if db.scalar(select(User).where(User.username == body.username)):
         raise HTTPException(409, "Логін зайнятий")
+    if body.icon and body.icon not in USER_ICON_KEYS:
+        raise HTTPException(400, "Невідома іконка")
     u = User(
         username=body.username,
         name=body.name,
         role=body.role,
         password_hash=hash_password(body.password),
         allowed_sections=body.allowed_sections,
+        icon=body.icon or None,
     )
     db.add(u)
     db.commit()
@@ -63,5 +67,9 @@ def patch_user(uid: uuid.UUID, body: UserPatch, db: Session = Depends(get_db), m
         u.totp_secret, u.totp_enabled = None, False
     if "allowed_sections" in body.model_fields_set:
         u.allowed_sections = body.allowed_sections
+    if "icon" in body.model_fields_set:
+        if body.icon and body.icon not in USER_ICON_KEYS:
+            raise HTTPException(400, "Невідома іконка")
+        u.icon = body.icon or None
     db.commit()
     return u

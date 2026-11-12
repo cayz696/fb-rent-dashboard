@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_user
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.user_icons import USER_ICON_KEYS
 from app.core.security import (
     COOKIE, make_token, new_totp_secret, read_token, totp_uri, verify_password, verify_totp,
 )
@@ -87,6 +88,20 @@ def update_my_theme(body: ThemeIn, db: Session = Depends(get_db), user: User = D
     if t not in ("dark", "light"):
         raise HTTPException(400, "Тема має бути 'dark' або 'light'")
     user.theme = t
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+class IconIn(BaseModel):
+    icon: str
+
+
+@router.patch("/me/icon", response_model=UserOut)
+def update_my_icon(body: IconIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    if body.icon not in USER_ICON_KEYS:
+        raise HTTPException(400, "Невідома іконка")
+    user.icon = body.icon
     db.commit()
     db.refresh(user)
     return user
