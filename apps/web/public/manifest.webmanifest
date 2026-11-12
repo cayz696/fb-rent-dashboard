@@ -1,0 +1,16 @@
+{
+  "name": "Skull Partners",
+  "short_name": "Skull",
+  "description": "Дашборд Skull Partners",
+  "start_url": "/tasks",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090a0f",
+  "theme_color": "#090a0f",
+  "lang": "uk",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

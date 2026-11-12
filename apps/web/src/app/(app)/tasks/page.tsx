@@ -177,6 +177,14 @@ export default function TasksPage() {
 
   // Модальні вікна
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("task");
+    if (!id) return;
+    setActiveTab("board");
+    setBoardScope("active");
+    setSelectedTaskId(id);
+  }, []);
   const [creatingTask, setCreatingTask] = useState(false);
   const [addingGroup, setAddingGroup] = useState(false);
   const [threadForTask, setThreadForTask] = useState<TelegramConversationThread | null>(null);
@@ -1491,7 +1499,7 @@ export default function TasksPage() {
                   </Select>
                 </Field>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Нікнейм у ТГ (@username)">
                     <Input value={simSender} onChange={(e) => setSimSender(e.target.value)} placeholder="WebLumi" />
                   </Field>
@@ -1816,7 +1824,7 @@ export default function TasksPage() {
                       2. Скопіюйте <code>App api_id</code> та <code>App api_hash</code> і введіть свій номер телефону.
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <Field label="Telegram API ID">
                         <Input
                           value={tgApiId}
@@ -1922,7 +1930,7 @@ export default function TasksPage() {
                         <div className="text-[12.5px] font-semibold text-main">
                           Крок 2: код із чату «Telegram» на цьому ноутбуці. Не з SMS.
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                           <Field label="Код підтвердження">
                             <Input
                               value={tgCode}
@@ -1965,7 +1973,7 @@ export default function TasksPage() {
                 icon={<Sparkles size={16} className="text-purple-400" />}
               />
               <div className="space-y-4 p-5">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Режим ШІ-двигуна">
                     <Select
                       value={aiProvider || data?.ai_config.provider || "hybrid"}
@@ -1989,7 +1997,7 @@ export default function TasksPage() {
                   </Field>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field
                     label="API Ключ (OpenAI / Gemini)"
                     hint={
@@ -2387,7 +2395,7 @@ function TaskDetailModal({
         )}
         {!ctx.thread_messages?.length && <TaskChatContext task={task} />}
         {/* Top Metadata Grid */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Field label="Статус">
             <Select
               value={task.status}
@@ -2446,7 +2454,7 @@ function TaskDetailModal({
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Баєр (FBM)">
             <Select
               value={task.buyer_id || ""}
@@ -2748,7 +2756,7 @@ function CreateTaskModal({
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Категорія">
             <Select value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)}>
               {Object.entries(CATEGORY_META).map(([k, v]) => (
@@ -2883,7 +2891,7 @@ function AddTelegramGroupModal({
           <Input value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="-1002198451234" />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Прив'язати до Команди">
             <Select value={teamId} onChange={(e) => setTeamId(e.target.value)}>
               <option value="">Без прив'язки</option>
@@ -3030,7 +3038,7 @@ function CreateTaskFromThreadModal({
           <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Категорія">
             <Select value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)}>
               {Object.entries(CATEGORY_META).map(([k, v]) => (

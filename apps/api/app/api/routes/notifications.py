@@ -81,7 +81,7 @@ def notifications(db: Session = Depends(get_db), _: User = Depends(current_user)
     for n in personal:
         items.append(Notification(
             type=n.kind,
-            severity="info",
+            severity="warning" if n.kind == "task_assigned" else "info",
             title=n.title,
             message=n.message,
             link=n.link or "/tasks",

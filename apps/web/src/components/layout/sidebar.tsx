@@ -330,7 +330,7 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
             </span>
           </button>
           <div className="flex items-center gap-1">
-            <NotificationsBell />
+            <span className="max-md:hidden"><NotificationsBell /></span>
             <button
               onClick={logout}
               title="Вийти"

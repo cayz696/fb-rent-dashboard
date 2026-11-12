@@ -23,7 +23,7 @@ export function ClientForm({ client, onClose, onDone }: { client?: Client; onClo
   return (
     <Modal title={client ? `Клієнт: ${client.name}` : "Новий клієнт"} onClose={onClose}>
       <Field label="Назва"><Input autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Telegram @username(и)" hint="через кому"><Input value={f.usernames} onChange={(e) => setF({ ...f, usernames: e.target.value })} /></Field>
         <Field label="Telegram chat ID"><Input inputMode="numeric" value={f.chat} onChange={(e) => setF({ ...f, chat: e.target.value })} /></Field>
       </div>
@@ -32,7 +32,7 @@ export function ClientForm({ client, onClose, onDone }: { client?: Client; onClo
         <Field label="Початк. баланс"><Input type="number" step="0.01" value={f.balance} onChange={(e) => setF({ ...f, balance: e.target.value })} /></Field>
         <Field label="Статус"><Input value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="BM ID клієнта" hint="Business Manager — для розшарювання доступу"><Input value={f.bm} onChange={(e) => setF({ ...f, bm: e.target.value })} /></Field>
         <Field label="Інші умови (текст)"><Input value={f.terms} onChange={(e) => setF({ ...f, terms: e.target.value })} /></Field>
       </div>

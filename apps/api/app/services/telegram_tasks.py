@@ -1201,6 +1201,9 @@ def create_task_from_thread(
     if group_obj:
         group_obj.tasks_created = (group_obj.tasks_created or 0) + 1
 
+    from app.services.task_notify import notify_assigned
+    notify_assigned(db, task, actor_id=creator.id)
+
     db.commit()
     db.refresh(task)
     return task

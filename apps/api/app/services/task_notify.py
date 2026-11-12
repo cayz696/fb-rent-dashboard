@@ -33,7 +33,7 @@ def notify_assigned(db: Session, task: TeamTask, actor_id: uuid.UUID | None = No
         "task_assigned",
         f"Вам призначено {code}",
         task.title,
-        "/tasks",
+        f"/tasks?task={task.id}",
     )
 
 
@@ -54,5 +54,5 @@ def notify_status(db: Session, task: TeamTask, old_status: str, new_status: str,
             "task_status",
             f"{code}: {old_label} → {new_label}",
             task.title,
-            "/tasks",
+            f"/tasks?task={task.id}",
         )

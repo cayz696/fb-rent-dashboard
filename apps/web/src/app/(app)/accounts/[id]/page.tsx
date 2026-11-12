@@ -107,7 +107,7 @@ export default function AccountCard() {
               <Field label="Ad account ID" hint="Ключ зшивки з Clover"><Input disabled={!write} value={form.ad_account_id ?? ""} onChange={(e) => setForm({ ...form, ad_account_id: e.target.value })} /></Field>
               <Field label="Профіль AdsPower"><Input disabled={!write} value={form.adspower_profile_id ?? ""} onChange={(e) => setForm({ ...form, adspower_profile_id: e.target.value })} /></Field>
               <Field label="БМ (назва / позначка)"><Input disabled={!write} value={form.bm_label ?? ""} onChange={(e) => setForm({ ...form, bm_label: e.target.value })} /></Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Карта, last4" hint="Лише 4 останні цифри"><Input disabled={!write} inputMode="numeric" maxLength={4} value={form.card_last4 ?? ""} onChange={(e) => setForm({ ...form, card_last4: e.target.value.replace(/\D/g, "") })} /></Field>
                 <Field label="Ліміт, $"><Input disabled={!write} type="number" min="0" value={form.spend_limit ?? ""} onChange={(e) => setForm({ ...form, spend_limit: e.target.value })} /></Field>
               </div>

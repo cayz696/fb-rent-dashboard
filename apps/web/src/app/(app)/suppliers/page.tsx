@@ -103,7 +103,7 @@ function BatchModal({ suppliers, onClose, onDone }: { suppliers: Supplier[]; onC
           <option value="">— оберіть —</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Кількість"><Input type="number" min="1" max="1000" value={qty} onChange={(e) => setQty(e.target.value)} /></Field>
         <Field label="Ціна за шт., $"><Input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} /></Field>
       </div>
