@@ -31,7 +31,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Button, Card, CardHeader, Chip, Empty, ErrorNote, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
@@ -181,6 +181,13 @@ export default function TasksPage() {
   const [threadForTask, setThreadForTask] = useState<TelegramConversationThread | null>(null);
   const [showAllThreads, setShowAllThreads] = useState(false);
   const [promoteError, setPromoteError] = useState("");
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null);
+  const [dragStatus, setDragStatus] = useState<Record<string, TaskStatus>>({});
+  const [dragError, setDragError] = useState("");
+  const skipCardClick = useRef(false);
+  const blockDrag = useRef(false);
+  const draggingId = useRef<string | null>(null);
 
   const queryParams = new URLSearchParams();
   if (filterCat) queryParams.set("category", filterCat);
@@ -233,21 +240,55 @@ export default function TasksPage() {
   const selectedTask = data?.tasks.find((t) => t.id === selectedTaskId) || null;
 
   const allTasks = data?.tasks ?? [];
-  const isClosed = (t: TeamTaskItem) => t.status === "done" || t.status === "rejected";
+  const isClosed = (t: TeamTaskItem) => {
+    const status = dragStatus[t.id] ?? t.status;
+    return status === "done" || status === "rejected";
+  };
   const activeTasks = allTasks.filter((t) => !isClosed(t));
   const archivedTasks = allTasks.filter(isClosed);
   const dayAgo = Date.now() - 24 * 3600 * 1000;
-  const recentlyDone = allTasks.filter(
-    (t) => t.status === "done" && Date.parse(t.completed_at || t.updated_at) >= dayAgo,
-  );
   const tableTasks = boardScope === "archive" ? archivedTasks : activeTasks;
   const openThreads = (data?.threads ?? []).filter(
     (th) => !th.linked_task_id && th.resolution_state === "needs_action",
   );
 
+  function shownStatus(task: TeamTaskItem): TaskStatus {
+    return dragStatus[task.id] ?? task.status;
+  }
+
+  useEffect(() => {
+    if (!data) return;
+    setDragStatus((prev) => {
+      const ids = Object.keys(prev);
+      if (!ids.length) return prev;
+      const next = { ...prev };
+      let changed = false;
+      for (const id of ids) {
+        const task = data.tasks.find((t) => t.id === id);
+        if (!task || task.status === prev[id]) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [data]);
+
   async function quickStatusChange(task: TeamTaskItem, newStatus: TaskStatus) {
-    await api(`/tasks/${task.id}`, { method: "PATCH", body: { status: newStatus } });
-    mutate();
+    if ((dragStatus[task.id] ?? task.status) === newStatus) return;
+    setDragStatus((prev) => ({ ...prev, [task.id]: newStatus }));
+    setDragError("");
+    try {
+      await api(`/tasks/${task.id}`, { method: "PATCH", body: { status: newStatus } });
+      mutate();
+    } catch (e) {
+      setDragStatus((prev) => {
+        const next = { ...prev };
+        delete next[task.id];
+        return next;
+      });
+      setDragError((e as Error).message);
+    }
   }
 
   async function quickAssignChange(task: TeamTaskItem, assigneeId: string) {
@@ -1001,14 +1042,50 @@ export default function TasksPage() {
 
           {/* КАНБАН-ДОШКА */}
           {boardScope === "active" && viewMode === "kanban" ? (
+            <div className="space-y-3">
+              {editable && (
+                <p className="text-[12.5px] text-faint">Перетягніть картку в іншу колонку, щоб змінити статус.</p>
+              )}
+              {dragError && <ErrorNote>{dragError}</ErrorNote>}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-4">
               {STATUS_COLUMNS.map((col) => {
-                const colTasks =
-                  col.key === "done"
-                    ? [...allTasks.filter((t) => t.status === "review"), ...recentlyDone]
-                    : allTasks.filter((t) => t.status === col.key);
+                const colTasks = allTasks.filter((t) => {
+                  const status = shownStatus(t);
+                  if (col.key === "done") {
+                    if (status === "review") return true;
+                    if (status !== "done") return false;
+                    return dragStatus[t.id] === "done" || Date.parse(t.completed_at || t.updated_at) >= dayAgo;
+                  }
+                  return status === col.key;
+                });
                 return (
-                  <div key={col.key} className="flex flex-col rounded-xl border border-line bg-inset/60 p-3">
+                  <div
+                    key={col.key}
+                    onDragOver={(e) => {
+                      if (!editable || !draggingId.current) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragOverCol !== col.key) setDragOverCol(col.key);
+                    }}
+                    onDragLeave={(e) => {
+                      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                      setDragOverCol((current) => (current === col.key ? null : current));
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const id = e.dataTransfer.getData("text/plain") || draggingId.current;
+                      const task = id ? allTasks.find((t) => t.id === id) : undefined;
+                      draggingId.current = null;
+                      setDragId(null);
+                      setDragOverCol(null);
+                      if (!task || !editable) return;
+                      quickStatusChange(task, col.key);
+                    }}
+                    className={cn(
+                      "flex flex-col rounded-xl border border-line bg-inset/60 p-3 transition",
+                      dragId && dragOverCol === col.key && "border-accent bg-accent/5 ring-2 ring-accent/40",
+                    )}
+                  >
                     <div className="mb-3 flex items-center justify-between px-1">
                       <div className="flex items-center gap-2">
                         <span className="size-2.5 rounded-full" style={{ background: col.accent }} />
@@ -1033,12 +1110,43 @@ export default function TasksPage() {
                           const prio = PRIORITY_META[task.priority] || PRIORITY_META.medium;
                           const CatIcon = cat.icon;
                           const ctx = task.ai_context || {};
+                          const status = shownStatus(task);
 
                           return (
                             <div
                               key={task.id}
-                              onClick={() => setSelectedTaskId(task.id)}
-                              className="group relative flex cursor-pointer flex-col gap-2.5 rounded-lg border border-line-strong bg-surface p-3.5 transition hover:border-accent hover:shadow-[0_6px_24px_rgba(0,0,0,0.45)]"
+                              draggable={editable}
+                              onPointerDown={(e) => {
+                                blockDrag.current = !!(e.target as HTMLElement).closest("[data-no-drag]");
+                              }}
+                              onDragStart={(e) => {
+                                if (!editable || blockDrag.current) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                skipCardClick.current = true;
+                                draggingId.current = task.id;
+                                e.dataTransfer.effectAllowed = "move";
+                                e.dataTransfer.setData("text/plain", task.id);
+                                setDragId(task.id);
+                              }}
+                              onDragEnd={() => {
+                                draggingId.current = null;
+                                setDragId(null);
+                                setDragOverCol(null);
+                                window.setTimeout(() => {
+                                  skipCardClick.current = false;
+                                }, 0);
+                              }}
+                              onClick={() => {
+                                if (skipCardClick.current) return;
+                                setSelectedTaskId(task.id);
+                              }}
+                              className={cn(
+                                "group relative flex cursor-pointer flex-col gap-2.5 rounded-lg border border-line-strong bg-surface p-3.5 transition hover:border-accent hover:shadow-[0_6px_24px_rgba(0,0,0,0.45)]",
+                                editable && "cursor-grab active:cursor-grabbing",
+                                dragId === task.id && "opacity-40",
+                              )}
                             >
                               {/* Top row: Code + Priority + AI confidence */}
                               <div className="flex items-center justify-between gap-2">
@@ -1150,6 +1258,7 @@ export default function TasksPage() {
 
                               {/* Bottom controls: Assignee + Quick Action */}
                               <div
+                                data-no-drag
                                 className="mt-1 flex items-center justify-between gap-2 border-t border-divider pt-2.5"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -1176,7 +1285,7 @@ export default function TasksPage() {
                                       → У Заявку
                                     </button>
                                   )}
-                                  {task.status === "inbox" && (
+                                  {status === "inbox" && (
                                     <button
                                       onClick={() => quickStatusChange(task, "in_progress")}
                                       className="cursor-pointer rounded border border-line-strong bg-surface-hover px-2 py-1 text-[11px] font-medium text-main hover:border-accent"
@@ -1184,7 +1293,7 @@ export default function TasksPage() {
                                       В роботу →
                                     </button>
                                   )}
-                                  {task.status === "todo" && (
+                                  {status === "todo" && (
                                     <button
                                       onClick={() => quickStatusChange(task, "in_progress")}
                                       className="cursor-pointer rounded border border-line-strong bg-surface-hover px-2 py-1 text-[11px] font-medium text-main hover:border-accent"
@@ -1192,7 +1301,7 @@ export default function TasksPage() {
                                       Почати →
                                     </button>
                                   )}
-                                  {task.status === "in_progress" && (
+                                  {status === "in_progress" && (
                                     <button
                                       onClick={() => quickStatusChange(task, "done")}
                                       className="cursor-pointer rounded border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/25"
@@ -1210,6 +1319,7 @@ export default function TasksPage() {
                   </div>
                 );
               })}
+            </div>
             </div>
           ) : (
             /* ТАБЛИЧНИЙ ВИД */
