@@ -35,7 +35,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { Button, Card, CardHeader, Chip, Empty, ErrorNote, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
-import { canWrite, useMe } from "@/lib/session";
+import { canWrite, isAdmin, useMe } from "@/lib/session";
 import type {
   TaskCategory,
   TaskChecklistItem,
@@ -145,6 +145,7 @@ export default function TasksPage() {
   const { user } = useMe();
   const router = useRouter();
   const editable = canWrite(user);
+  const admin = isAdmin(user);
 
   const [activeTab, setActiveTab] = useState<"board" | "stream" | "settings">("board");
   const [viewMode, setViewModeState] = useState<"kanban" | "list">("kanban");
@@ -1635,7 +1636,7 @@ export default function TasksPage() {
                                   ) : null;
                                 })()}
                               </div>
-                            ) : (
+                            ) : admin ? (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -1660,6 +1661,8 @@ export default function TasksPage() {
                               >
                                 + Підключити
                               </Button>
+                            ) : (
+                              <span className="shrink-0 text-[11px] text-faint">Лише адмін</span>
                             )}
                           </div>
                         ))}
@@ -1911,7 +1914,7 @@ export default function TasksPage() {
                 title="Робочі групи Telegram під моніторингом"
                 icon={<UsersGroupIcon />}
                 right={
-                  editable && (
+                  admin && (
                     <Button size="sm" variant="primary" onClick={() => setAddingGroup(true)}>
                       <Plus size={14} /> Додати групу
                     </Button>
@@ -2104,7 +2107,7 @@ export default function TasksPage() {
         </Modal>
       )}
 
-      {addingGroup && data && (
+      {addingGroup && data && admin && (
         <AddTelegramGroupModal
           overview={data}
           onClose={() => setAddingGroup(false)}

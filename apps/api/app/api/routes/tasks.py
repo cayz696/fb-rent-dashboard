@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import actor_of, can_write, current_user
+from app.api.deps import actor_of, admin_only, can_write, current_user
 from app.core.db import get_db
 from app.models import Buyer, Client, Team, TeamTask, TelegramGroup, TelegramMessageLog, User
 from app.services import task_ai_parser, task_notify, telegram_tasks
@@ -571,7 +571,7 @@ def delete_task(task_id: uuid.UUID, db: Session = Depends(get_db), _: User = Dep
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/groups", status_code=201)
-def create_telegram_group(body: TelegramGroupCreateIn, db: Session = Depends(get_db), _: User = Depends(can_write)):
+def create_telegram_group(body: TelegramGroupCreateIn, db: Session = Depends(get_db), _: User = Depends(admin_only)):
     existing = db.scalar(select(TelegramGroup).where(TelegramGroup.chat_id == body.chat_id))
     if existing:
         existing.title = body.title.strip()
