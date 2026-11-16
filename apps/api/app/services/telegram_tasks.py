@@ -476,35 +476,48 @@ def _topic_id(message) -> Optional[int]:
 
 
 _topic_title_cache: dict[tuple[int, int], str] = {}
+_topics_checked: set[int] = set()
+
+
+async def _load_forum_topics(client, peer, chat_id: int) -> None:
+    """Список віток каналу. Запит по окремих id ламається, якщо серед них є звичайні відповіді."""
+    if client is None or peer is None or int(chat_id) in _topics_checked:
+        return
+    _topics_checked.add(int(chat_id))
+    try:
+        from telethon.tl.functions.channels import GetForumTopicsRequest
+
+        offset_topic = 0
+        offset_id = 0
+        offset_date = None
+        for _ in range(30):
+            result = await client(
+                GetForumTopicsRequest(
+                    channel=peer,
+                    offset_date=offset_date,
+                    offset_id=offset_id,
+                    offset_topic=offset_topic,
+                    limit=100,
+                )
+            )
+            topics = [item for item in (getattr(result, "topics", []) or []) if getattr(item, "title", None)]
+            if not topics:
+                break
+            for topic in topics:
+                _topic_title_cache[(int(chat_id), int(topic.id))] = str(topic.title).strip()[:256]
+            last = topics[-1]
+            offset_topic = int(last.id)
+            offset_id = int(getattr(last, "top_message", None) or last.id)
+            offset_date = getattr(last, "date", None)
+            if len(topics) < 100:
+                break
+    except Exception as exc:
+        log.warning("forum topics unavailable for chat %s: %s", chat_id, type(exc).__name__)
 
 
 async def lookup_topic_titles(client, peer, chat_id: int, topic_ids: List[int]) -> Dict[int, str]:
     """Назва вітки форуму. Кеш, щоб не питати Telegram на кожне повідомлення."""
-    wanted = []
-    for raw in topic_ids:
-        try:
-            topic_id = int(raw)
-        except (TypeError, ValueError):
-            continue
-        if topic_id > 0 and (int(chat_id), topic_id) not in _topic_title_cache:
-            wanted.append(topic_id)
-    if wanted and client is not None and peer is not None:
-        try:
-            from telethon.tl.functions.channels import GetForumTopicsByIDRequest
-        except ImportError:
-            from telethon.tl.functions.messages import GetForumTopicsByIDRequest
-        for offset in range(0, len(wanted), 50):
-            chunk = wanted[offset : offset + 50]
-            try:
-                result = await client(GetForumTopicsByIDRequest(channel=peer, topics=chunk))
-            except Exception:
-                log.warning("forum topics unavailable for chat %s", chat_id)
-                continue
-            for topic in getattr(result, "topics", []) or []:
-                title = getattr(topic, "title", None)
-                tid = getattr(topic, "id", None)
-                if title and tid:
-                    _topic_title_cache[(int(chat_id), int(tid))] = str(title).strip()[:256]
+    await _load_forum_topics(client, peer, chat_id)
     found: Dict[int, str] = {}
     for raw in topic_ids:
         try:
