@@ -485,19 +485,23 @@ async def _load_forum_topics(client, peer, chat_id: int) -> None:
         return
     _topics_checked.add(int(chat_id))
     try:
-        from telethon.tl.functions.channels import GetForumTopicsRequest
+        try:
+            from telethon.tl.functions.messages import GetForumTopicsRequest
+        except ImportError:
+            from telethon.tl.functions.channels import GetForumTopicsRequest
 
+        peer_key = "peer" if "peer" in GetForumTopicsRequest.__init__.__code__.co_varnames else "channel"
         offset_topic = 0
         offset_id = 0
         offset_date = None
         for _ in range(30):
             result = await client(
                 GetForumTopicsRequest(
-                    channel=peer,
                     offset_date=offset_date,
                     offset_id=offset_id,
                     offset_topic=offset_topic,
                     limit=100,
+                    **{peer_key: peer},
                 )
             )
             topics = [item for item in (getattr(result, "topics", []) or []) if getattr(item, "title", None)]
@@ -512,7 +516,7 @@ async def _load_forum_topics(client, peer, chat_id: int) -> None:
             if len(topics) < 100:
                 break
     except Exception as exc:
-        log.warning("forum topics unavailable for chat %s: %s", chat_id, type(exc).__name__)
+        log.warning("forum topics unavailable for chat %s: %s %s", chat_id, type(exc).__name__, str(exc)[:160])
 
 
 async def lookup_topic_titles(client, peer, chat_id: int, topic_ids: List[int]) -> Dict[int, str]:
