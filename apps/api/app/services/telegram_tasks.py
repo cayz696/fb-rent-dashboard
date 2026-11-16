@@ -21,6 +21,7 @@ _monitored_loaded_at = 0.0
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.db import SessionLocal
 from app.models import Buyer, Client, Request, RequestStatus, SystemState, Team, TeamTask, TelegramGroup, TelegramMessageLog, User
@@ -715,6 +716,60 @@ def _buyer_heat(db: Session, buyer_id: Optional[uuid.UUID], team_id: Optional[uu
     return buyer_id, info
 
 
+def _open_followup_task(
+    db: Session,
+    group: TelegramGroup,
+    sender_username: Optional[str],
+    category: str,
+    reply_to_msg_id: Optional[int],
+) -> Optional[TeamTask]:
+    """Та сама людина в тому ж чаті не повинна отримувати другу задачу на кожне повідомлення."""
+    if reply_to_msg_id:
+        replied = db.scalar(
+            select(TelegramMessageLog).where(
+                TelegramMessageLog.chat_id == group.chat_id,
+                TelegramMessageLog.message_id == int(reply_to_msg_id),
+            )
+        )
+        if replied and replied.task_id:
+            linked = db.get(TeamTask, replied.task_id)
+            if linked and linked.status not in ("done", "rejected"):
+                return linked
+    sender = (sender_username or "").lstrip("@").lower()
+    if not sender:
+        return None
+    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2)
+    candidates = db.scalars(
+        select(TeamTask)
+        .where(
+            TeamTask.telegram_group_id == group.id,
+            TeamTask.category == (category or "general"),
+            TeamTask.status.notin_(["done", "rejected"]),
+            TeamTask.created_at >= since,
+        )
+        .order_by(TeamTask.created_at.desc())
+    ).all()
+    for task in candidates:
+        who = (task.telegram_sender or "").lower()
+        if sender in who:
+            return task
+    return None
+
+
+def _attach_followup(task: TeamTask, sender_display: str, now: dt.datetime) -> None:
+    comments = list(task.comments or [])
+    comments.append(
+        {
+            "id": str(uuid.uuid4())[:8],
+            "author": "ШІ-Диспетчер",
+            "text": f"Ще повідомлення від {sender_display} у тому ж діалозі. Окрему задачу не створено.",
+            "created_at": now.isoformat(),
+        }
+    )
+    task.comments = comments
+    flag_modified(task, "comments")
+
+
 def ingest_message(
     db: Session,
     group: TelegramGroup,
@@ -850,64 +905,76 @@ def ingest_message(
 
     created_task: Optional[TeamTask] = None
     if should_create:
-        ents = ai_result.get("entities") or {}
-        b_id = uuid.UUID(ents["buyer_id"]) if ents.get("buyer_id") else None
-        t_id = uuid.UUID(ents["team_id"]) if ents.get("team_id") else group.team_id
-        c_id = uuid.UUID(ents["client_id"]) if ents.get("client_id") else group.client_id
-
-        priority = ai_result.get("priority", "medium")
-        b_id, heat = _buyer_heat(db, b_id, t_id, f"{raw_text}\n{sender_name or ''}\n{sender_username or ''}")
-        if heat and priority in ("low", "medium", None, ""):
-            priority = "high"
-        created_task = TeamTask(
-            title=ai_result.get("title") or raw_text[:100],
-            description=ai_result.get("description"),
-            raw_source_text=raw_text,
-            status="inbox",
-            priority=priority,
-            category=ai_result.get("category", "general"),
-            source="telegram",
-            telegram_group_id=group.id,
-            telegram_chat_title=group.title,
-            telegram_sender=sender_display,
-            telegram_message_link=msg_link,
-            assignee_id=group.default_assignee_id,
-            team_id=t_id,
-            buyer_id=b_id,
-            client_id=c_id,
-            checklist=ai_result.get("checklist") or [],
-            ai_context={
-                "confidence": ai_result.get("confidence", 80),
-                "engine": ai_result.get("engine", "domain_ai_v2"),
-                "reasoning": ai_result.get("reasoning"),
-                "suggested_reply": ai_result.get("suggested_reply"),
-                "account_codes": ents.get("account_codes") or [],
-                "card_last4": ents.get("card_last4") or [],
-                "bm_id": ents.get("bm_id"),
-                "qty": ents.get("qty"),
-                "geo": ents.get("geo"),
-                "limit": ents.get("limit"),
-                "context_used": len(context_messages),
-                "spend_signal": heat,
-            },
-            comments=[
-                {
-                    "id": str(uuid.uuid4())[:8],
-                    "author": "ШІ-Диспетчер",
-                    "text": (
-                        f"Задачу автоматично виділено з групи «{group.title}» (впевненість ШІ: {ai_result.get('confidence', 85)}%). {ai_result.get('reasoning', '')}"
-                        + (f" Пріоритет піднято: {heat['reason']} (сьогодні ${heat['today']}, вчора ${heat['yesterday']})." if heat else "")
-                    ),
-                    "created_at": now.isoformat(),
-                }
-            ],
+        followup = _open_followup_task(
+            db,
+            group,
+            sender_username,
+            str(ai_result.get("category") or "general"),
+            reply_to_msg_id,
         )
-        db.add(created_task)
-        db.flush()
-        group.tasks_created = (group.tasks_created or 0) + 1
-        log_entry.task_id = created_task.id
-        from app.services.task_notify import notify_assigned
-        notify_assigned(db, created_task)
+        if followup is not None and not force_create_task:
+            _attach_followup(followup, sender_display, now)
+            log_entry.task_id = followup.id
+            ai_result["attached_to"] = followup.code
+        else:
+            ents = ai_result.get("entities") or {}
+            b_id = uuid.UUID(ents["buyer_id"]) if ents.get("buyer_id") else None
+            t_id = uuid.UUID(ents["team_id"]) if ents.get("team_id") else group.team_id
+            c_id = uuid.UUID(ents["client_id"]) if ents.get("client_id") else group.client_id
+
+            priority = ai_result.get("priority", "medium")
+            b_id, heat = _buyer_heat(db, b_id, t_id, f"{raw_text}\n{sender_name or ''}\n{sender_username or ''}")
+            if heat and priority in ("low", "medium", None, ""):
+                priority = "high"
+            created_task = TeamTask(
+                title=ai_result.get("title") or raw_text[:100],
+                description=ai_result.get("description"),
+                raw_source_text=raw_text,
+                status="inbox",
+                priority=priority,
+                category=ai_result.get("category", "general"),
+                source="telegram",
+                telegram_group_id=group.id,
+                telegram_chat_title=group.title,
+                telegram_sender=sender_display,
+                telegram_message_link=msg_link,
+                assignee_id=group.default_assignee_id,
+                team_id=t_id,
+                buyer_id=b_id,
+                client_id=c_id,
+                checklist=ai_result.get("checklist") or [],
+                ai_context={
+                    "confidence": ai_result.get("confidence", 80),
+                    "engine": ai_result.get("engine", "domain_ai_v2"),
+                    "reasoning": ai_result.get("reasoning"),
+                    "suggested_reply": ai_result.get("suggested_reply"),
+                    "account_codes": ents.get("account_codes") or [],
+                    "card_last4": ents.get("card_last4") or [],
+                    "bm_id": ents.get("bm_id"),
+                    "qty": ents.get("qty"),
+                    "geo": ents.get("geo"),
+                    "limit": ents.get("limit"),
+                    "context_used": len(context_messages),
+                    "spend_signal": heat,
+                },
+                comments=[
+                    {
+                        "id": str(uuid.uuid4())[:8],
+                        "author": "ШІ-Диспетчер",
+                        "text": (
+                            f"Задачу автоматично виділено з групи «{group.title}» (впевненість ШІ: {ai_result.get('confidence', 85)}%). {ai_result.get('reasoning', '')}"
+                            + (f" Пріоритет піднято: {heat['reason']} (сьогодні ${heat['today']}, вчора ${heat['yesterday']})." if heat else "")
+                        ),
+                        "created_at": now.isoformat(),
+                    }
+                ],
+            )
+            db.add(created_task)
+            db.flush()
+            group.tasks_created = (group.tasks_created or 0) + 1
+            log_entry.task_id = created_task.id
+            from app.services.task_notify import notify_assigned
+            notify_assigned(db, created_task)
 
     log_entry.is_actionable = bool(ai_result.get("is_actionable", False))
     log_entry.ai_intent = ai_result.get("category", "noise")
@@ -917,11 +984,12 @@ def ingest_message(
     if created_task:
         db.refresh(created_task)
 
+    linked = created_task or (db.get(TeamTask, log_entry.task_id) if log_entry.task_id else None)
     return {
         "log_id": log_entry.id,
         "task_created": created_task is not None,
-        "task_id": str(created_task.id) if created_task else None,
-        "task_code": created_task.code if created_task else None,
+        "task_id": str(linked.id) if linked else None,
+        "task_code": linked.code if linked else None,
         "ai_result": ai_result,
     }
 
@@ -963,6 +1031,8 @@ def convert_task_to_account_request(db: Session, task: TeamTask, actor: str) -> 
     task.linked_request_id = req.id
     if task.status == "inbox":
         task.status = "in_progress"
+    if task.status == "in_progress" and task.started_at is None:
+        task.started_at = dt.datetime.now(dt.timezone.utc)
     db.commit()
     return req
 

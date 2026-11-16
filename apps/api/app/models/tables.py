@@ -337,6 +337,7 @@ class TeamTask(Base):
     ai_context: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
     comments: Mapped[List[Any]] = mapped_column(JSONB, default=list)
     due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = ts()
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

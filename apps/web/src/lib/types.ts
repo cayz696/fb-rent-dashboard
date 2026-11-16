@@ -193,7 +193,7 @@ export interface TeamTaskItem {
   };
   chat_context?: TaskChatLine[];
   comments: TaskCommentItem[];
-  due_at: string | null; completed_at: string | null; created_at: string; updated_at: string;
+  due_at: string | null; started_at: string | null; completed_at: string | null; created_at: string; updated_at: string;
 }
 
 export interface TaskChatLine {

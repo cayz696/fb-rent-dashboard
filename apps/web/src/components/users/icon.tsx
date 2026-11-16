@@ -251,3 +251,130 @@ export function AssigneePicker({
     </div>
   );
 }
+
+export function SearchSelect({
+  options,
+  value,
+  onChange,
+  emptyLabel,
+  placeholder = "Пошук…",
+  disabled,
+}: {
+  options: { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+  emptyLabel: string;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [box, setBox] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const current = options.find((item) => item.id === value) ?? null;
+  const q = query.trim().toLowerCase();
+  const shown = options.filter((item) => item.name.toLowerCase().includes(q)).slice(0, 40);
+
+  useEffect(() => {
+    if (!open) return;
+    function place() {
+      const el = rootRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const margin = 8;
+      const want = 280;
+      const below = window.innerHeight - rect.bottom - margin;
+      const above = rect.top - margin;
+      const openUp = below < 180 && above > below;
+      const maxHeight = Math.max(140, Math.min(want, openUp ? above : below));
+      const top = openUp ? Math.max(margin, rect.top - 4 - maxHeight) : rect.bottom + 4;
+      setBox({ left: rect.left, top, width: Math.max(rect.width, 220), maxHeight });
+    }
+    function close(event: MouseEvent) {
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    place();
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    document.addEventListener("mousedown", close);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative min-w-0">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          setQuery("");
+          setOpen((v) => !v);
+        }}
+        className="flex h-9 w-full items-center gap-2 rounded-md border border-line-strong bg-inset px-3 text-left text-[13px] text-main outline-none transition hover:border-accent disabled:cursor-default disabled:opacity-70"
+      >
+        <span className={cn("min-w-0 flex-1 truncate", current ? "text-main" : "text-faint")}>
+          {current?.name ?? emptyLabel}
+        </span>
+      </button>
+      {open && !disabled && box && createPortal(
+        <div
+          ref={menuRef}
+          style={{ left: box.left, top: box.top, width: box.width, maxHeight: box.maxHeight }}
+          className="fixed z-[80] overflow-hidden rounded-lg border border-line-strong bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.28)]"
+        >
+          <div className="border-b border-divider p-1.5">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={placeholder}
+              className="h-8 w-full rounded-md border border-line bg-inset px-2 text-[13px] text-main outline-none focus:border-accent"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto p-1">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+              className="flex w-full cursor-pointer items-center rounded-md px-2 py-1.5 text-left text-[12px] text-muted hover:bg-surface-hover hover:text-main"
+            >
+              {emptyLabel}
+            </button>
+            {shown.length === 0 ? (
+              <div className="px-2 py-2 text-[12px] text-faint">Нічого не знайдено</div>
+            ) : (
+              shown.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(item.id);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full cursor-pointer items-center rounded-md px-2 py-1.5 text-left text-[12px] hover:bg-surface-hover",
+                    item.id === value ? "bg-accent/10 text-main" : "text-main",
+                  )}
+                >
+                  <span className="truncate">{item.name}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}

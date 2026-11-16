@@ -175,7 +175,10 @@ def _chat_context_by_task(db: Session, tasks: List[TeamTask]) -> Dict[uuid.UUID,
     anchors = list(db.scalars(select(TelegramMessageLog).where(TelegramMessageLog.task_id.in_(ids))).all())
     by_task: Dict[uuid.UUID, TelegramMessageLog] = {}
     for row in anchors:
-        if row.task_id and row.task_id not in by_task:
+        if not row.task_id:
+            continue
+        prev = by_task.get(row.task_id)
+        if prev is None or (row.sent_at and (prev.sent_at is None or row.sent_at >= prev.sent_at)):
             by_task[row.task_id] = row
     if not by_task:
         return {}
@@ -264,6 +267,7 @@ def _serialize_task(
         "chat_context": chat_context or [],
         "comments": t.comments or [],
         "due_at": t.due_at.isoformat() if t.due_at else None,
+        "started_at": t.started_at.isoformat() if t.started_at else None,
         "completed_at": t.completed_at.isoformat() if t.completed_at else None,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
@@ -540,6 +544,8 @@ def update_task(task_id: uuid.UUID, body: TaskPatchIn, db: Session = Depends(get
             t.completed_at = dt.datetime.now(dt.timezone.utc)
         elif body.status != "done":
             t.completed_at = None
+        if body.status == "in_progress" and t.started_at is None:
+            t.started_at = dt.datetime.now(dt.timezone.utc)
     if "priority" in fields_set and body.priority is not None:
         t.priority = body.priority
     if "category" in fields_set and body.category is not None:

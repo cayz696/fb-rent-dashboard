@@ -33,7 +33,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
-import { AssigneePicker, UserBadge } from "@/components/users/icon";
+import { AssigneePicker, SearchSelect, UserBadge } from "@/components/users/icon";
 import { Button, Card, CardHeader, Chip, Empty, ErrorNote, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 import { api, fetcher } from "@/lib/api";
 import { canWrite, isAdmin, useMe } from "@/lib/session";
@@ -1091,19 +1091,27 @@ export default function TasksPage() {
                       quickStatusChange(task, col.key);
                     }}
                     className={cn(
-                      "flex min-w-0 flex-col rounded-xl border border-line bg-inset/60 p-3 transition",
-                      dragId && dragOverCol === col.key && "border-accent bg-accent/5 ring-2 ring-accent/40",
+                      "flex min-w-0 flex-col rounded-xl border-2 p-3 transition",
+                      dragId && dragOverCol === col.key && "ring-2 ring-accent/50",
                     )}
+                    style={{
+                      background: `color-mix(in srgb, ${col.accent} 16%, var(--surface-inset))`,
+                      borderColor: `color-mix(in srgb, ${col.accent} 55%, transparent)`,
+                    }}
                   >
+                    <div className="mb-3 h-1.5 rounded-full" style={{ background: col.accent }} />
                     <div className="mb-3 flex items-center justify-between px-1">
                       <div className="flex items-center gap-2">
                         <span className="size-2.5 rounded-full" style={{ background: col.accent }} />
                         <div>
-                          <div className="text-[14px] font-semibold text-main">{col.title}</div>
+                          <div className="text-[14px] font-semibold" style={{ color: col.accent }}>{col.title}</div>
                           <div className="text-[11px] text-faint">{col.subtitle}</div>
                         </div>
                       </div>
-                      <span className="rounded-full border border-line-strong bg-surface px-2.5 py-0.5 font-mono text-[12px] font-semibold text-muted">
+                      <span
+                        className="rounded-full px-2.5 py-0.5 font-mono text-[12px] font-semibold"
+                        style={{ color: col.accent, background: "var(--surface)" }}
+                      >
                         {colTasks.length}
                       </span>
                     </div>
@@ -1244,6 +1252,12 @@ export default function TasksPage() {
                                   )}
                                 </div>
                               )}
+
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-faint">
+                                <span>Впала {kyivStamp(task.created_at)}</span>
+                                {task.started_at && <span>В роботі з {kyivStamp(task.started_at)}</span>}
+                                {spentLabel(task) && <span>Затрачено {spentLabel(task)}</span>}
+                              </div>
 
                               {/* Checklist progress */}
                               {task.checklist_total > 0 && (
@@ -2285,6 +2299,30 @@ function UsersGroupIcon() {
 /* ─────────────────────────────────────────────────────────────────────────────
    Модальне вікно перегляду та редагування задачі (Чекліст, ШІ-контекст, Коментарі)
    ───────────────────────────────────────────────────────────────────────────── */
+function kyivStamp(iso?: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("uk-UA", {
+    timeZone: "Europe/Kyiv",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function spentLabel(task: TeamTaskItem): string {
+  if (!task.started_at) return "";
+  const start = Date.parse(task.started_at);
+  const endIso = task.completed_at || (task.status === "in_progress" || task.status === "review" ? new Date().toISOString() : "");
+  const end = endIso ? Date.parse(endIso) : NaN;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "";
+  const mins = Math.max(1, Math.round((end - start) / 60000));
+  const hours = Math.floor(mins / 60);
+  const rest = mins % 60;
+  if (hours <= 0) return `${mins} хв`;
+  return rest ? `${hours} год ${rest} хв` : `${hours} год`;
+}
+
 function previewChatText(raw: string, limit = 160): string {
   let text = (raw || "").replace(/\s+/g, " ").trim();
   const hadSecret = /EAA[A-Za-z0-9]{12,}/.test(text) || /[A-Za-z0-9+/=_-]{60,}/.test(text);
@@ -2419,6 +2457,12 @@ function TaskDetailModal({
   return (
     <Modal title={`${task.code} — ${task.title}`} onClose={onClose} width="max-w-3xl">
       <div className="max-h-[80vh] space-y-5 overflow-y-auto pr-1">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted">
+          <span>Впала {kyivStamp(task.created_at)}</span>
+          <span>{task.started_at ? `Взяли в роботу ${kyivStamp(task.started_at)}` : "Ще не брали в роботу"}</span>
+          {spentLabel(task) && <span>Затрачено {spentLabel(task)}</span>}
+          {task.completed_at && <span>Закрили {kyivStamp(task.completed_at)}</span>}
+        </div>
         {task.description && task.description.trim() !== task.title.trim() && (
           <p className="text-[13.5px] leading-relaxed text-main">{task.description}</p>
         )}
@@ -2485,18 +2529,14 @@ function TaskDetailModal({
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Баєр (FBM)">
-            <Select
+            <SearchSelect
               value={task.buyer_id || ""}
               disabled={!editable}
-              onChange={(e) => patchTask({ buyer_id: e.target.value || null })}
-            >
-              <option value="">Не прив'язано</option>
-              {overview.buyers.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </Select>
+              emptyLabel="Не прив'язано"
+              placeholder="Пошук баєра"
+              options={overview.buyers.map((b) => ({ id: b.id, name: b.name }))}
+              onChange={(id) => patchTask({ buyer_id: id || null })}
+            />
           </Field>
 
           <Field label="Команда">
@@ -2830,14 +2870,13 @@ function CreateTaskModal({
           </Field>
 
           <Field label="Баєр">
-            <Select value={buyerId} onChange={(e) => setBuyerId(e.target.value)}>
-              <option value="">Без баєра</option>
-              {overview.buyers.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </Select>
+            <SearchSelect
+              value={buyerId}
+              emptyLabel="Без баєра"
+              placeholder="Пошук баєра"
+              options={overview.buyers.map((b) => ({ id: b.id, name: b.name }))}
+              onChange={setBuyerId}
+            />
           </Field>
         </div>
 
@@ -3112,14 +3151,13 @@ function CreateTaskFromThreadModal({
           </Field>
 
           <Field label="Баєр">
-            <Select value={buyerId} onChange={(e) => setBuyerId(e.target.value)}>
-              <option value="">Без баєра</option>
-              {overview.buyers.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </Select>
+            <SearchSelect
+              value={buyerId}
+              emptyLabel="Без баєра"
+              placeholder="Пошук баєра"
+              options={overview.buyers.map((b) => ({ id: b.id, name: b.name }))}
+              onChange={setBuyerId}
+            />
           </Field>
         </div>
 
