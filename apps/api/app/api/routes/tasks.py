@@ -421,6 +421,218 @@ def get_tasks_overview(
     }
 
 
+_OPEN_TASK_STATUSES = {"inbox", "todo", "in_progress", "review"}
+_KYIV = dt.timezone(dt.timedelta(hours=2))
+
+
+def _aware(value: dt.datetime | None) -> dt.datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=dt.timezone.utc)
+    return value
+
+
+def _kyiv_day(value: dt.datetime) -> dt.date:
+    return _aware(value).astimezone(_KYIV).date()
+
+
+def _hours_between(start: dt.datetime | None, end: dt.datetime | None) -> float | None:
+    start_at = _aware(start)
+    end_at = _aware(end)
+    if start_at is None or end_at is None:
+        return None
+    hours = (end_at - start_at).total_seconds() / 3600
+    if hours < 0:
+        return None
+    return hours
+
+
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return round(ordered[mid], 1)
+    return round((ordered[mid - 1] + ordered[mid]) / 2, 1)
+
+
+def _staff_bucket(days: list[dt.date]) -> dict[str, Any]:
+    return {
+        "open": 0,
+        "inbox": 0,
+        "todo": 0,
+        "in_progress": 0,
+        "review": 0,
+        "stuck": 0,
+        "urgent_open": 0,
+        "assigned_period": 0,
+        "done_period": 0,
+        "rejected_period": 0,
+        "reaction_hours": [],
+        "work_hours": [],
+        "categories": {},
+        "daily_done": {day.isoformat(): 0 for day in days},
+        "daily_assigned": {day.isoformat(): 0 for day in days},
+    }
+
+
+def _pack_staff(bucket: dict[str, Any], user: User | None) -> dict[str, Any]:
+    done = bucket["done_period"]
+    rejected = bucket["rejected_period"]
+    assigned = bucket["assigned_period"]
+    terminal = done + rejected
+    return {
+        "id": str(user.id) if user else None,
+        "name": user.name if user else "Не призначено",
+        "icon": user.icon if user else None,
+        "role": user.role.value if user else None,
+        "active": bool(user and user.is_active),
+        "open": bucket["open"],
+        "inbox": bucket["inbox"],
+        "todo": bucket["todo"],
+        "in_progress": bucket["in_progress"],
+        "review": bucket["review"],
+        "stuck": bucket["stuck"],
+        "urgent_open": bucket["urgent_open"],
+        "assigned_period": assigned,
+        "done_period": done,
+        "rejected_period": rejected,
+        "success_rate": round(100 * done / terminal) if terminal else None,
+        "throughput": round(100 * done / assigned) if assigned else None,
+        "median_reaction_hours": _median(bucket["reaction_hours"]),
+        "median_work_hours": _median(bucket["work_hours"]),
+        "categories": [
+            {"category": key, "open": value["open"], "done": value["done"]}
+            for key, value in sorted(bucket["categories"].items())
+        ],
+        "daily_done": [{"date": day, "count": bucket["daily_done"][day]} for day in bucket["daily_done"]],
+    }
+
+
+@router.get("/staff-report")
+def staff_report(
+    date_from: Optional[dt.date] = None,
+    date_to: Optional[dt.date] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_only),
+):
+    """Звіт адміна: навантаження, закриття і швидкість по кожному працівнику."""
+    today = dt.datetime.now(_KYIV).date()
+    end = date_to or today
+    start = date_from or (end - dt.timedelta(days=13))
+    if start > end:
+        start, end = end, start
+    now = dt.datetime.now(dt.timezone.utc)
+    stuck_line = now - dt.timedelta(hours=24)
+    days: list[dt.date] = []
+    cursor = start
+    while cursor <= end:
+        days.append(cursor)
+        cursor += dt.timedelta(days=1)
+
+    users = db.scalars(select(User).order_by(User.name)).all()
+    tasks = db.scalars(select(TeamTask)).all()
+    users_by_id = {user.id: user for user in users}
+    staff_ids = {user.id for user in users if user.is_active and user.role.value in ("admin", "operator")}
+    for task in tasks:
+        if task.assignee_id:
+            staff_ids.add(task.assignee_id)
+
+    buckets = {user_id: _staff_bucket(days) for user_id in staff_ids}
+    unassigned = _staff_bucket(days)
+
+    def absorb(bucket: dict[str, Any], task: TeamTask) -> None:
+        if task.status in _OPEN_TASK_STATUSES:
+            bucket["open"] += 1
+            bucket[task.status] = bucket.get(task.status, 0) + 1
+            anchor = task.started_at if task.status == "in_progress" and task.started_at else task.created_at
+            if anchor and _aware(anchor) <= stuck_line:
+                bucket["stuck"] += 1
+            if task.priority == "urgent":
+                bucket["urgent_open"] += 1
+            cat = bucket["categories"].setdefault(task.category or "general", {"open": 0, "done": 0})
+            cat["open"] += 1
+        if task.created_at:
+            created_day = _kyiv_day(task.created_at)
+            if start <= created_day <= end:
+                bucket["assigned_period"] += 1
+                bucket["daily_assigned"][created_day.isoformat()] += 1
+        if task.status == "done" and task.completed_at:
+            done_day = _kyiv_day(task.completed_at)
+            if start <= done_day <= end:
+                bucket["done_period"] += 1
+                bucket["daily_done"][done_day.isoformat()] += 1
+                cat = bucket["categories"].setdefault(task.category or "general", {"open": 0, "done": 0})
+                cat["done"] += 1
+                worked = _hours_between(task.started_at, task.completed_at)
+                if worked is not None:
+                    bucket["work_hours"].append(worked)
+        if task.status == "rejected" and task.updated_at:
+            rejected_day = _kyiv_day(task.updated_at)
+            if start <= rejected_day <= end:
+                bucket["rejected_period"] += 1
+        if task.started_at and task.created_at:
+            started_day = _kyiv_day(task.started_at)
+            if start <= started_day <= end:
+                reaction = _hours_between(task.created_at, task.started_at)
+                if reaction is not None:
+                    bucket["reaction_hours"].append(reaction)
+
+    for task in tasks:
+        if task.assignee_id and task.assignee_id in buckets:
+            absorb(buckets[task.assignee_id], task)
+        elif task.assignee_id is None:
+            absorb(unassigned, task)
+
+    people = []
+    for user_id, bucket in buckets.items():
+        user = users_by_id.get(user_id)
+        if user is None:
+            continue
+        row = _pack_staff(bucket, user)
+        has_work = row["open"] or row["assigned_period"] or row["done_period"] or row["rejected_period"]
+        if has_work or (user.is_active and user.role.value in ("admin", "operator")):
+            people.append(row)
+    people.sort(key=lambda row: (-row["done_period"], -row["open"], row["name"]))
+
+    team_done = sum(row["done_period"] for row in people)
+    team_rejected = sum(row["rejected_period"] for row in people)
+    team_assigned = sum(row["assigned_period"] for row in people) + unassigned["assigned_period"]
+    terminal = team_done + team_rejected
+    daily = []
+    for day in days:
+        key = day.isoformat()
+        daily.append({
+            "date": key,
+            "done": sum(bucket["daily_done"][key] for bucket in buckets.values()),
+            "assigned": sum(bucket["daily_assigned"][key] for bucket in buckets.values()) + unassigned["daily_assigned"][key],
+        })
+
+    return {
+        "date_from": start.isoformat(),
+        "date_to": end.isoformat(),
+        "team": {
+            "people": sum(1 for row in people if row["active"]),
+            "open": sum(row["open"] for row in people),
+            "stuck": sum(row["stuck"] for row in people),
+            "urgent_open": sum(row["urgent_open"] for row in people),
+            "unassigned_open": unassigned["open"],
+            "assigned_period": team_assigned,
+            "done_period": team_done,
+            "rejected_period": team_rejected,
+            "success_rate": round(100 * team_done / terminal) if terminal else None,
+            "throughput": round(100 * team_done / team_assigned) if team_assigned else None,
+            "median_reaction_hours": _median([hour for bucket in buckets.values() for hour in bucket["reaction_hours"]]),
+            "median_work_hours": _median([hour for bucket in buckets.values() for hour in bucket["work_hours"]]),
+            "daily": daily,
+        },
+        "unassigned": _pack_staff(unassigned, None),
+        "people": people,
+    }
+
+
 @router.post("/from-thread", status_code=201)
 def create_task_from_thread_endpoint(body: CreateFromThreadIn, db: Session = Depends(get_db), user: User = Depends(can_write)):
     try:

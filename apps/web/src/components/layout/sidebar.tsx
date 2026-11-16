@@ -20,6 +20,7 @@ import {
   Settings,
   Sparkles,
   Sun,
+  Trophy,
   Upload,
   UserCheck,
   Users,
@@ -112,6 +113,7 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
   const allItems = [
     { key: "dashboard", href: "/dashboard", label: "Дашборд", icon: LayoutGrid },
     { key: "tasks", href: "/tasks", label: "Задачник (ТГ + ШІ)", icon: CheckSquare, badge: openTasksCount || undefined },
+    { key: "staff", href: "/staff", label: "Успішність", icon: Trophy, adminOnly: true },
     { key: "buyers", href: "/buyers", label: "Юзери та Команди", icon: UserCheck },
     { key: "cards", href: "/cards", label: "Картки FBM", icon: CreditCard, count: fbm?.total || undefined },
     {
@@ -134,7 +136,10 @@ export function Sidebar({ user, mobileOpen = false, onNavigate }: { user: User; 
     { key: "settings", href: "/settings", label: "Налаштування", icon: Settings },
   ];
 
-  const items = allItems.filter((item) => hasSectionAccess(user, item.key));
+  const items = allItems.filter((item) => {
+    if ("adminOnly" in item && item.adminOnly) return isAdmin(user);
+    return hasSectionAccess(user, item.key);
+  });
   const currentTheme = user.theme === "light" ? "light" : "dark";
 
   async function toggleTheme() {
