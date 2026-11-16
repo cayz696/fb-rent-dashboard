@@ -325,6 +325,8 @@ class TeamTask(Base):
     source: Mapped[str] = mapped_column(String(32), default="manual")  # telegram | ai_agent | manual
     telegram_group_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("telegram_groups.id"), index=True)
     telegram_chat_title: Mapped[Optional[str]] = mapped_column(String(256))
+    telegram_topic_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+    telegram_topic_title: Mapped[Optional[str]] = mapped_column(String(256))
     telegram_sender: Mapped[Optional[str]] = mapped_column(String(128))
     telegram_message_link: Mapped[Optional[str]] = mapped_column(Text)
     assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"), index=True)
@@ -359,6 +361,8 @@ class TelegramMessageLog(Base):
     chat_title: Mapped[Optional[str]] = mapped_column(String(256))
     message_id: Mapped[int] = mapped_column(BigInteger, index=True)
     reply_to_msg_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+    topic_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True)
+    topic_title: Mapped[Optional[str]] = mapped_column(String(256))
     sender_id: Mapped[Optional[int]] = mapped_column(BigInteger)
     sender_username: Mapped[Optional[str]] = mapped_column(String(128))
     sender_name: Mapped[Optional[str]] = mapped_column(String(128))

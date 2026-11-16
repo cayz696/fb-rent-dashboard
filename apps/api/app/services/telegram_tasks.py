@@ -19,7 +19,7 @@ _chat_entities: dict[int, Any] = {}
 _monitored_ids: set[int] = set()
 _monitored_loaded_at = 0.0
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -462,6 +462,117 @@ def _reply_id(message) -> Optional[int]:
     return getattr(reply_obj, "reply_to_top_id", None) or getattr(reply_obj, "reply_to_msg_id", None)
 
 
+def _topic_id(message) -> Optional[int]:
+    """ID гілки форуму. Це не відправник: у Clover Group у всіх вітках пише менеджер."""
+    reply_obj = getattr(message, "reply_to", None)
+    if not reply_obj:
+        return None
+    top = getattr(reply_obj, "reply_to_top_id", None)
+    if top:
+        return int(top)
+    if getattr(reply_obj, "forum_topic", False) and getattr(reply_obj, "reply_to_msg_id", None):
+        return int(reply_obj.reply_to_msg_id)
+    return None
+
+
+_topic_title_cache: dict[tuple[int, int], str] = {}
+
+
+async def lookup_topic_titles(client, peer, chat_id: int, topic_ids: List[int]) -> Dict[int, str]:
+    """Назва вітки форуму. Кеш, щоб не питати Telegram на кожне повідомлення."""
+    wanted = []
+    for raw in topic_ids:
+        try:
+            topic_id = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if topic_id > 0 and (int(chat_id), topic_id) not in _topic_title_cache:
+            wanted.append(topic_id)
+    if wanted and client is not None and peer is not None:
+        try:
+            from telethon.tl.functions.channels import GetForumTopicsByIDRequest
+        except ImportError:
+            from telethon.tl.functions.messages import GetForumTopicsByIDRequest
+        for offset in range(0, len(wanted), 50):
+            chunk = wanted[offset : offset + 50]
+            try:
+                result = await client(GetForumTopicsByIDRequest(channel=peer, topics=chunk))
+            except Exception:
+                log.warning("forum topics unavailable for chat %s", chat_id)
+                continue
+            for topic in getattr(result, "topics", []) or []:
+                title = getattr(topic, "title", None)
+                tid = getattr(topic, "id", None)
+                if title and tid:
+                    _topic_title_cache[(int(chat_id), int(tid))] = str(title).strip()[:256]
+    found: Dict[int, str] = {}
+    for raw in topic_ids:
+        try:
+            topic_id = int(raw)
+        except (TypeError, ValueError):
+            continue
+        title = _topic_title_cache.get((int(chat_id), topic_id))
+        if title:
+            found[topic_id] = title
+    return found
+
+
+def _buyer_from_topic(db: Session, topic_title: Optional[str], team_id: Optional[uuid.UUID]):
+    if not topic_title:
+        return None
+    from app.services.buyers_sync import match_buyer_in_text
+
+    return match_buyer_in_text(db, topic_title, team_id)
+
+
+def apply_topic_to_task(db: Session, task: TeamTask, topic_id: Optional[int], topic_title: Optional[str]) -> bool:
+    changed = False
+    if topic_id and not task.telegram_topic_id:
+        task.telegram_topic_id = int(topic_id)
+        changed = True
+    if topic_title and not task.telegram_topic_title:
+        task.telegram_topic_title = topic_title[:256]
+        changed = True
+    buyer = _buyer_from_topic(db, task.telegram_topic_title, task.team_id)
+    if buyer is not None and task.buyer_id is None:
+        task.buyer_id = buyer.id
+        changed = True
+    return changed
+
+
+def remember_topic_titles(db: Session, chat_id: int, titles: Dict[int, str]) -> int:
+    """Записує назви віток у вже збережені повідомлення і відкриті задачі."""
+    if not titles:
+        return 0
+    ids = list(titles)
+    logs = db.scalars(
+        select(TelegramMessageLog).where(
+            TelegramMessageLog.chat_id == int(chat_id),
+            or_(
+                TelegramMessageLog.topic_id.in_(ids),
+                TelegramMessageLog.reply_to_msg_id.in_(ids),
+            ),
+        )
+    ).all()
+    changed = 0
+    for row in logs:
+        key = int(row.topic_id or row.reply_to_msg_id or 0)
+        title = titles.get(key)
+        if not title:
+            continue
+        if row.topic_id != key or row.topic_title != title:
+            row.topic_id = key
+            row.topic_title = title
+            changed += 1
+        if row.task_id:
+            task = db.get(TeamTask, row.task_id)
+            if task is not None and apply_topic_to_task(db, task, key, title):
+                changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
 def ingest_new_telegram_message(
     chat_id: int,
     message_id: int,
@@ -470,6 +581,8 @@ def ingest_new_telegram_message(
     sender_name: Optional[str] = None,
     reply_to_msg_id: Optional[int] = None,
     sent_at: Optional[dt.datetime] = None,
+    topic_id: Optional[int] = None,
+    topic_title: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Пише повідомлення тільки якщо цей чат стоїть на моніторингу і його ще немає в потоці."""
     text = (raw_text or "").strip()
@@ -487,12 +600,35 @@ def ingest_new_telegram_message(
             sender_name=sender_name,
             message_id=int(message_id),
             reply_to_msg_id=reply_to_msg_id,
+            topic_id=topic_id,
+            topic_title=topic_title,
             sent_at=sent_at,
             allow_auto_task=True,
         )
         if not res.get("duplicate"):
             _save_tg_raw(db, {"last_sync_at": dt.datetime.now(dt.timezone.utc).isoformat()})
         return res
+
+
+async def refresh_saved_topic_titles(client, db: Session) -> None:
+    """Для старих повідомлень дописує назву вітки і байєра, якщо вітка ще порожня."""
+    groups = db.scalars(select(TelegramGroup).where(TelegramGroup.is_monitored.is_(True))).all()
+    for group in groups:
+        rows = db.execute(
+            select(TelegramMessageLog.reply_to_msg_id, func.count())
+            .where(
+                TelegramMessageLog.chat_id == group.chat_id,
+                TelegramMessageLog.reply_to_msg_id.is_not(None),
+                TelegramMessageLog.topic_title.is_(None),
+            )
+            .group_by(TelegramMessageLog.reply_to_msg_id)
+            .order_by(func.count().desc())
+            .limit(150)
+        ).all()
+        peer = _chat_entities.get(int(group.chat_id), int(group.chat_id))
+        titles = await lookup_topic_titles(client, peer, int(group.chat_id), [int(item[0]) for item in rows if item[0]])
+        if titles:
+            remember_topic_titles(db, int(group.chat_id), titles)
 
 
 async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25, client=None) -> Dict[str, Any]:
@@ -540,6 +676,7 @@ async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25, cl
                         continue
                     sender = await m.get_sender()
                     s_uname, s_name = _sender_fields(sender)
+                    topic = _topic_id(m)
                     pending.append(
                         {
                             "chat_id": int(g.chat_id),
@@ -548,10 +685,18 @@ async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25, cl
                             "sender_username": s_uname,
                             "sender_name": s_name,
                             "reply_to_msg_id": _reply_id(m),
+                            "topic_id": topic,
                             "sent_at": m.date if getattr(m, "date", None) else None,
                         }
                     )
+                titles = await lookup_topic_titles(
+                    client,
+                    peer,
+                    int(g.chat_id),
+                    [item["topic_id"] for item in pending if item.get("topic_id")],
+                )
                 for item in pending:
+                    item["topic_title"] = titles.get(item.get("topic_id") or 0)
                     res = await asyncio.to_thread(ingest_new_telegram_message, **item)
                     if res.get("duplicate") or res.get("skipped"):
                         continue
@@ -562,6 +707,7 @@ async def sync_messages_from_telegram(db: Session, per_group_limit: int = 25, cl
                 log.warning("telegram catch-up skipped chat %s: %s", g.chat_id, exc)
                 continue
 
+        await refresh_saved_topic_titles(client, db)
         _save_tg_raw(db, {"last_sync_at": dt.datetime.now(dt.timezone.utc).isoformat(), "delivery": "live"})
         return {"groups_checked": len(groups), "new_messages": new_msgs, "tasks_created": new_tasks}
     finally:
@@ -633,6 +779,9 @@ async def run_live_listener() -> None:
                         return
                     sender = await event.get_sender()
                     s_uname, s_name = _sender_fields(sender)
+                    topic = _topic_id(event.message)
+                    peer = getattr(event, "input_chat", None) or _chat_entities.get(int(chat_id), int(chat_id))
+                    titles = await lookup_topic_titles(client, peer, int(chat_id), [topic] if topic else [])
                     payload = {
                         "chat_id": int(chat_id),
                         "message_id": int(event.id),
@@ -640,6 +789,8 @@ async def run_live_listener() -> None:
                         "sender_username": s_uname,
                         "sender_name": s_name,
                         "reply_to_msg_id": _reply_id(event.message),
+                        "topic_id": topic,
+                        "topic_title": titles.get(topic) if topic else None,
                         "sent_at": event.message.date if getattr(event.message, "date", None) else None,
                     }
                     asyncio.create_task(asyncio.to_thread(ingest_new_telegram_message, **payload))
@@ -778,6 +929,8 @@ def ingest_message(
     sender_name: Optional[str] = None,
     message_id: Optional[int] = None,
     reply_to_msg_id: Optional[int] = None,
+    topic_id: Optional[int] = None,
+    topic_title: Optional[str] = None,
     sent_at: Optional[dt.datetime] = None,
     force_create_task: bool = False,
     allow_auto_task: bool = False,
@@ -817,6 +970,8 @@ def ingest_message(
             chat_title=group.title,
             message_id=int(message_id),
             reply_to_msg_id=reply_to_msg_id,
+            topic_id=int(topic_id) if topic_id else None,
+            topic_title=(topic_title or "").strip()[:256] or None,
             sender_username=sender_username,
             sender_name=sender_name,
             raw_text=raw_text,
@@ -914,6 +1069,7 @@ def ingest_message(
         )
         if followup is not None and not force_create_task:
             _attach_followup(followup, sender_display, now)
+            apply_topic_to_task(db, followup, topic_id, topic_title)
             log_entry.task_id = followup.id
             ai_result["attached_to"] = followup.code
         else:
@@ -923,7 +1079,10 @@ def ingest_message(
             c_id = uuid.UUID(ents["client_id"]) if ents.get("client_id") else group.client_id
 
             priority = ai_result.get("priority", "medium")
-            b_id, heat = _buyer_heat(db, b_id, t_id, f"{raw_text}\n{sender_name or ''}\n{sender_username or ''}")
+            b_id, heat = _buyer_heat(db, b_id, t_id, f"{topic_title or ''}\n{raw_text}\n{sender_name or ''}\n{sender_username or ''}")
+            named = _buyer_from_topic(db, topic_title, t_id)
+            if named is not None:
+                b_id = named.id
             if heat and priority in ("low", "medium", None, ""):
                 priority = "high"
             created_task = TeamTask(
@@ -936,6 +1095,8 @@ def ingest_message(
                 source="telegram",
                 telegram_group_id=group.id,
                 telegram_chat_title=group.title,
+                telegram_topic_id=int(topic_id) if topic_id else None,
+                telegram_topic_title=(topic_title or "").strip()[:256] or None,
                 telegram_sender=sender_display,
                 telegram_message_link=msg_link,
                 assignee_id=group.default_assignee_id,
@@ -1115,6 +1276,7 @@ def build_conversation_threads(
                     }
                 )
 
+            topic_title = next((row.topic_title for row in reversed(recent_slice) if row.topic_title), None)
             summary = task_ai_parser.summarize_conversation_thread(
                 db=db,
                 chat_title=chat_title,
@@ -1124,6 +1286,12 @@ def build_conversation_threads(
                 group_client_id=group_obj.client_id if group_obj else None,
             )
 
+            named = _buyer_from_topic(db, topic_title, group_obj.team_id if group_obj else None)
+            if named is not None:
+                summary["buyer_id"] = str(named.id)
+                summary["buyer_name"] = named.name
+                summary["buyer_tag"] = named.name
+
             last_dt = recent_slice[-1].sent_at
             threads_out.append(
                 {
@@ -1132,6 +1300,7 @@ def build_conversation_threads(
                     "chat_id": chat_id,
                     "chat_title": chat_title,
                     "topic_id": topic_id if topic_id > 0 else None,
+                    "topic_title": topic_title,
                     "client_display": summary["client_display"],
                     "buyer_tag": summary["buyer_tag"],
                     "buyer_id": summary["buyer_id"],
@@ -1202,6 +1371,10 @@ def create_task_from_thread(
     if heat and final_prio in ("low", "medium", None, ""):
         final_prio = "high"
     final_team_id = team_id or (uuid.UUID(thread["team_id"]) if thread.get("team_id") else (group_obj.team_id if group_obj else None))
+    if thread.get("topic_title"):
+        named = _buyer_from_topic(db, thread.get("topic_title"), final_team_id)
+        if named is not None:
+            final_buyer_id = named.id
     final_client_id = uuid.UUID(thread["client_id"]) if thread.get("client_id") else (group_obj.client_id if group_obj else None)
     final_assignee = assignee_id or (group_obj.default_assignee_id if group_obj else creator.id)
 
@@ -1225,7 +1398,9 @@ def create_task_from_thread(
         category=final_cat,
         source="telegram",
         telegram_group_id=group_obj.id if group_obj else None,
-        telegram_chat_title=thread["chat_title"] + (f" · Гілка #{topic_id}" if topic_id else ""),
+        telegram_chat_title=thread["chat_title"],
+        telegram_topic_id=thread.get("topic_id"),
+        telegram_topic_title=thread.get("topic_title"),
         telegram_sender=thread["client_display"],
         telegram_message_link=last_msg_link,
         assignee_id=final_assignee,

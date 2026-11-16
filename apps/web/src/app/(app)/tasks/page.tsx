@@ -859,7 +859,7 @@ export default function TasksPage() {
                           <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[12px]">
                             <span className="min-w-0 break-words rounded bg-surface px-2 py-0.5 font-semibold text-main">
                               💬 {th.chat_title}
-                              {th.topic_id ? ` · Гілка #${th.topic_id}` : ""}
+                              {th.topic_title ? ` · ${th.topic_title}` : th.topic_id ? ` · Гілка #${th.topic_id}` : ""}
                             </span>
                             <span className="font-mono font-semibold text-accent">{th.client_display}</span>
                           </div>
@@ -1244,6 +1244,11 @@ export default function TasksPage() {
                               </div>
 
                               {/* Telegram Group + Sender info */}
+                              {task.telegram_topic_title && (
+                                <div className="truncate text-[12.5px] font-semibold text-accent">
+                                  Вітка: {task.telegram_topic_title}
+                                </div>
+                              )}
                               {task.telegram_chat_title && (
                                 <div className="flex items-center justify-between text-[11px] text-faint">
                                   <span className="truncate">💬 {task.telegram_chat_title}</span>
@@ -1397,7 +1402,8 @@ export default function TasksPage() {
                           ))}
                           {task.telegram_chat_title && (
                             <div className="mt-0.5 truncate text-[11.5px] text-faint">
-                              💬 {task.telegram_chat_title} · {task.telegram_sender}
+                              💬 {task.telegram_chat_title}
+                              {task.telegram_topic_title ? ` · ${task.telegram_topic_title}` : ""} · {task.telegram_sender}
                             </div>
                           )}
                         </td>
@@ -1615,8 +1621,9 @@ export default function TasksPage() {
                       <div key={msg.id} className="flex min-w-0 flex-col gap-2 overflow-hidden p-4 transition hover:bg-surface-hover/50">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <span className="rounded bg-inset px-2 py-0.5 text-[11.5px] font-semibold text-main">
+                            <span className="min-w-0 break-words rounded bg-inset px-2 py-0.5 text-[11.5px] font-semibold text-main">
                               💬 {msg.chat_title || `Chat ${msg.chat_id}`}
+                              {msg.topic_title ? ` · ${msg.topic_title}` : ""}
                             </span>
                             <span className="font-mono text-[12px] text-accent">
                               @{msg.sender_username || msg.sender_name || "user"}
@@ -2563,7 +2570,10 @@ function TaskDetailModal({
                 <Bot size={15} />
                 <span>Розбір контексту ШІ ({ctx.confidence ?? 85}% впевненості)</span>
                 {task.telegram_chat_title && (
-                  <span className="text-muted">· Група: «{task.telegram_chat_title}»</span>
+                  <span className="text-muted">
+                    · Група: «{task.telegram_chat_title}»
+                    {task.telegram_topic_title ? ` · вітка ${task.telegram_topic_title}` : ""}
+                  </span>
                 )}
               </div>
               {task.telegram_message_link && (

@@ -247,6 +247,8 @@ def _serialize_task(
         "source": t.source,
         "telegram_group_id": str(t.telegram_group_id) if t.telegram_group_id else None,
         "telegram_chat_title": t.telegram_chat_title,
+        "telegram_topic_id": t.telegram_topic_id,
+        "telegram_topic_title": t.telegram_topic_title,
         "telegram_sender": t.telegram_sender,
         "telegram_message_link": t.telegram_message_link,
         "assignee_id": str(t.assignee_id) if t.assignee_id else None,
@@ -312,6 +314,8 @@ def _serialize_log(l: TelegramMessageLog, tasks_map: Dict[uuid.UUID, TeamTask]) 
         "group_id": str(l.group_id) if l.group_id else None,
         "chat_id": l.chat_id,
         "chat_title": l.chat_title,
+        "topic_id": l.topic_id,
+        "topic_title": l.topic_title,
         "message_id": l.message_id,
         "reply_to_msg_id": l.reply_to_msg_id,
         "sender_username": l.sender_username,
@@ -979,6 +983,9 @@ def force_create_task_from_log(log_id: int, db: Session = Depends(get_db), user:
 
     b_id = _uuid(ents.get("buyer_id"))
     t_id = _uuid(ents.get("team_id")) or (group.team_id if group else None)
+    named = telegram_tasks._buyer_from_topic(db, l.topic_title, t_id)
+    if named is not None:
+        b_id = named.id
     c_id = _uuid(ents.get("client_id")) or (group.client_id if group else None)
 
     cat = ai_res.get("category") if ai_res.get("category") in _TASK_CATEGORIES else "general"
@@ -999,6 +1006,8 @@ def force_create_task_from_log(log_id: int, db: Session = Depends(get_db), user:
         source="telegram",
         telegram_group_id=l.group_id,
         telegram_chat_title=(l.chat_title or "")[:250] or None,
+        telegram_topic_id=l.topic_id,
+        telegram_topic_title=l.topic_title,
         telegram_sender=sender[:120],
         telegram_message_link=l.message_link,
         assignee_id=group.default_assignee_id if group else user.id,
