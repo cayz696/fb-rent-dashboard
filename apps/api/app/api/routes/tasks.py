@@ -637,6 +637,101 @@ def staff_report(
     }
 
 
+def _staff_window(date_from: dt.date | None, date_to: dt.date | None) -> tuple[dt.date, dt.date]:
+    today = dt.datetime.now(_KYIV).date()
+    end = date_to or today
+    start = date_from or (end - dt.timedelta(days=13))
+    if start > end:
+        start, end = end, start
+    return start, end
+
+
+def _in_staff_window(value: dt.datetime | None, start: dt.date, end: dt.date) -> bool:
+    if value is None:
+        return False
+    day = _kyiv_day(value)
+    return start <= day <= end
+
+
+def _staff_kind_match(task: TeamTask, kind: str, start: dt.date, end: dt.date, now: dt.datetime) -> bool:
+    if kind == "done":
+        return task.status == "done" and _in_staff_window(task.completed_at, start, end)
+    if kind == "created":
+        return _in_staff_window(task.created_at, start, end)
+    if kind == "open":
+        return task.status in _OPEN_TASK_STATUSES
+    if kind == "rejected":
+        return task.status == "rejected" and _in_staff_window(task.updated_at, start, end)
+    if kind == "stuck":
+        if task.status not in _OPEN_TASK_STATUSES:
+            return False
+        anchor = task.started_at if task.status == "in_progress" and task.started_at else task.created_at
+        return bool(anchor and _aware(anchor) <= now - dt.timedelta(hours=24))
+    return False
+
+
+@router.get("/staff-report/tasks")
+def staff_report_tasks(
+    assignee_id: str = Query(default="none"),
+    kind: str = Query(default="done"),
+    date_from: Optional[dt.date] = None,
+    date_to: Optional[dt.date] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_only),
+):
+    """Задачі, з яких зібрана цифра в звіті успішності."""
+    if kind not in ("done", "created", "open", "rejected", "stuck"):
+        raise HTTPException(400, "Невідомий зріз")
+    start, end = _staff_window(date_from, date_to)
+    wanted: uuid.UUID | None
+    if assignee_id in ("", "none"):
+        wanted = None
+    else:
+        try:
+            wanted = uuid.UUID(assignee_id)
+        except ValueError:
+            raise HTTPException(400, "Невірний виконавець")
+
+    now = dt.datetime.now(dt.timezone.utc)
+    buyers = {buyer.id: buyer.name for buyer in db.scalars(select(Buyer)).all()}
+    rows = []
+    for task in db.scalars(select(TeamTask)).all():
+        if task.assignee_id != wanted:
+            continue
+        if not _staff_kind_match(task, kind, start, end, now):
+            continue
+        rows.append(task)
+
+    def sort_key(task: TeamTask) -> dt.datetime:
+        stamp = task.completed_at if kind == "done" else task.created_at
+        return _aware(stamp) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+
+    rows.sort(key=sort_key, reverse=True)
+    return {
+        "date_from": start.isoformat(),
+        "date_to": end.isoformat(),
+        "kind": kind,
+        "total": len(rows),
+        "tasks": [
+            {
+                "id": str(task.id),
+                "code": task.code,
+                "title": _preview_chat_text(task.title or "", limit=180),
+                "status": task.status,
+                "category": task.category,
+                "priority": task.priority,
+                "buyer_name": buyers.get(task.buyer_id) if task.buyer_id else None,
+                "telegram_chat_title": task.telegram_chat_title,
+                "telegram_topic_title": task.telegram_topic_title,
+                "created_at": task.created_at.isoformat() if task.created_at else None,
+                "started_at": task.started_at.isoformat() if task.started_at else None,
+                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            }
+            for task in rows[:300]
+        ],
+    }
+
+
 @router.post("/from-thread", status_code=201)
 def create_task_from_thread_endpoint(body: CreateFromThreadIn, db: Session = Depends(get_db), user: User = Depends(can_write)):
     try:

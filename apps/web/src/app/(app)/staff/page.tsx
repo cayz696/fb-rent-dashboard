@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { UserBadge } from "@/components/users/icon";
-import { Empty, ErrorNote, Input, PageHeader } from "@/components/ui";
+import { Empty, ErrorNote, Input, PageHeader, Select } from "@/components/ui";
 import { fetcher } from "@/lib/api";
 import { isAdmin, useMe } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -84,6 +84,59 @@ function dayLabel(iso: string): string {
   return iso.slice(8);
 }
 
+function kyivStamp(iso?: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("uk-UA", {
+    timeZone: "Europe/Kyiv",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+type StaffKind = "done" | "created" | "open" | "rejected" | "stuck";
+
+const KIND_LABEL: Record<StaffKind, string> = {
+  done: "Виконані",
+  created: "Нові",
+  open: "Висять",
+  rejected: "Відхилені",
+  stuck: "Завислі",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  inbox: "Вхідні",
+  todo: "До виконання",
+  in_progress: "В роботі",
+  review: "На перевірці",
+  done: "Виконано",
+  rejected: "Відхилено",
+};
+
+type StaffTaskRow = {
+  id: string;
+  code: string;
+  title: string;
+  status: string;
+  category: string;
+  priority: string;
+  buyer_name: string | null;
+  telegram_chat_title: string | null;
+  telegram_topic_title: string | null;
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+type StaffTaskList = {
+  date_from: string;
+  date_to: string;
+  kind: StaffKind;
+  total: number;
+  tasks: StaffTaskRow[];
+};
+
 export default function StaffReportPage() {
   const { user } = useMe();
   const today = new Date().toISOString().slice(0, 10);
@@ -94,6 +147,9 @@ export default function StaffReportPage() {
     return start.toISOString().slice(0, 10);
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [drill, setDrill] = useState<{ personId: string | null; kind: StaffKind } | null>(null);
+  const [taskQuery, setTaskQuery] = useState("");
+  const [taskCategory, setTaskCategory] = useState("");
 
   const allowed = isAdmin(user);
   const url = `/api/tasks/staff-report?date_from=${dateFrom}&date_to=${dateTo}`;
@@ -103,6 +159,23 @@ export default function StaffReportPage() {
     () => data?.people.find((person) => person.id === selectedId) ?? data?.people[0] ?? null,
     [data, selectedId],
   );
+  const drillPerson = useMemo(
+    () => data?.people.find((person) => person.id === drill?.personId) ?? null,
+    [data, drill],
+  );
+  const drillUrl = drill
+    ? `/api/tasks/staff-report/tasks?kind=${drill.kind}&date_from=${dateFrom}&date_to=${dateTo}&assignee_id=${drill.personId || "none"}`
+    : null;
+  const { data: taskList, error: taskError } = useSWR<StaffTaskList>(allowed && drillUrl ? drillUrl : null, fetcher);
+  const visibleTasks = useMemo(() => {
+    const query = taskQuery.trim().toLowerCase();
+    return (taskList?.tasks ?? []).filter((task) => {
+      if (taskCategory && task.category !== taskCategory) return false;
+      if (!query) return true;
+      const blob = `${task.code} ${task.title} ${task.buyer_name || ""} ${task.telegram_topic_title || ""}`.toLowerCase();
+      return blob.includes(query);
+    });
+  }, [taskList, taskQuery, taskCategory]);
 
   if (user && !allowed) {
     return (
@@ -124,6 +197,13 @@ export default function StaffReportPage() {
     start.setDate(end.getDate() - (days - 1));
     setDateTo(end.toISOString().slice(0, 10));
     setDateFrom(start.toISOString().slice(0, 10));
+  }
+
+  function openDrill(personId: string | null, kind: StaffKind) {
+    setSelectedId(personId);
+    setTaskQuery("");
+    setTaskCategory("");
+    setDrill((current) => (current?.personId === personId && current.kind === kind ? null : { personId, kind }));
   }
 
   return (
@@ -194,7 +274,9 @@ export default function StaffReportPage() {
           <section className="panel mb-5 overflow-hidden">
             <div className="border-b border-divider px-4 py-3">
               <h2 className="text-[15px] font-semibold text-main">По працівниках</h2>
-              <p className="text-[12px] text-muted">Смуга: зелене — виконано за період, жовте — висить зараз. Чим довша смуга, тим більше задач.</p>
+              <p className="text-[12px] text-muted">
+                Нових — задачі, що з’явились у ці дати. Виконано — закриті в ці дати, навіть якщо задача прийшла раніше. Тому виконаних буває більше, ніж нових. Натисни цифру, щоб відкрити список.
+              </p>
             </div>
             <div className="divide-y divide-divider">
               {data.people.map((person) => {
@@ -202,19 +284,47 @@ export default function StaffReportPage() {
                 const doneW = (person.done_period / maxLoad) * 100;
                 const openW = (person.open / maxLoad) * 100;
                 return (
-                  <button
+                  <div
                     key={person.id || person.name}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedId(person.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") setSelectedId(person.id);
+                    }}
                     className={cn("flex w-full cursor-pointer flex-col gap-2 px-4 py-3 text-left hover:bg-surface-hover", active && "bg-accent/5")}
                   >
                     <div className="flex flex-wrap items-center gap-3">
                       <UserBadge userId={person.id || person.name} icon={person.icon} size={16} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13.5px] font-semibold text-main">{person.name}</div>
-                        <div className="text-[11px] text-faint">
-                          призначено {person.assigned_period} · виконано {person.done_period} · висять {person.open}
-                          {person.stuck ? ` · завислі ${person.stuck}` : ""}
+                        <div className="flex flex-wrap gap-x-2 text-[11px] text-faint">
+                          <CountButton
+                            label="нових"
+                            value={person.assigned_period}
+                            active={drill?.personId === person.id && drill.kind === "created"}
+                            onClick={() => openDrill(person.id, "created")}
+                          />
+                          <CountButton
+                            label="виконано"
+                            value={person.done_period}
+                            active={drill?.personId === person.id && drill.kind === "done"}
+                            onClick={() => openDrill(person.id, "done")}
+                          />
+                          <CountButton
+                            label="висять"
+                            value={person.open}
+                            active={drill?.personId === person.id && drill.kind === "open"}
+                            onClick={() => openDrill(person.id, "open")}
+                          />
+                          {person.stuck > 0 && (
+                            <CountButton
+                              label="завислі"
+                              value={person.stuck}
+                              active={drill?.personId === person.id && drill.kind === "stuck"}
+                              onClick={() => openDrill(person.id, "stuck")}
+                            />
+                          )}
                         </div>
                       </div>
                       <div className="text-right">
@@ -226,11 +336,81 @@ export default function StaffReportPage() {
                       <div className="h-full bg-emerald-400" style={{ width: `${doneW}%` }} />
                       <div className="h-full bg-amber-400" style={{ width: `${openW}%` }} />
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
           </section>
+
+          {drill && (
+            <section className="panel mb-5 overflow-hidden">
+              <div className="border-b border-divider px-4 py-3">
+                <h2 className="text-[15px] font-semibold text-main">
+                  {KIND_LABEL[drill.kind]} · {drillPerson?.name || "Не призначено"}
+                </h2>
+                <p className="text-[12px] text-muted">
+                  {drill.kind === "open" || drill.kind === "stuck"
+                    ? "Це поточні задачі, дати періоду на них не впливають."
+                    : `За період ${dateFrom.split("-").reverse().join(".")}–${dateTo.split("-").reverse().join(".")}. Зміна дат зверху оновлює список.`}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-end gap-2 border-b border-divider px-4 py-3">
+                {(Object.keys(KIND_LABEL) as StaffKind[]).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => setDrill({ personId: drill.personId, kind })}
+                    className={cn(
+                      "cursor-pointer rounded-full border px-3 py-1 text-[12px] font-semibold",
+                      drill.kind === kind ? "border-accent bg-accent text-on-accent" : "border-line-strong text-muted hover:text-main",
+                    )}
+                  >
+                    {KIND_LABEL[kind]}
+                  </button>
+                ))}
+                <Select className="h-9 w-44" value={taskCategory} onChange={(event) => setTaskCategory(event.target.value)}>
+                  <option value="">Усі категорії</option>
+                  {Object.entries(CATEGORY_LABEL).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </Select>
+                <Input
+                  className="h-9 w-56"
+                  placeholder="Код, назва, байєр, вітка"
+                  value={taskQuery}
+                  onChange={(event) => setTaskQuery(event.target.value)}
+                />
+              </div>
+              {taskError && <ErrorNote>{(taskError as Error).message}</ErrorNote>}
+              {visibleTasks.length === 0 ? (
+                <div className="px-4 py-6">
+                  <Empty>{taskList ? "За цим фільтром задач немає." : "Завантажую задачі…"}</Empty>
+                </div>
+              ) : (
+                <div className="divide-y divide-divider">
+                  <div className="px-4 py-2 text-[11px] text-faint">
+                    Показано {visibleTasks.length} з {taskList?.total ?? visibleTasks.length}
+                  </div>
+                  {visibleTasks.map((task) => (
+                    <div key={task.id} className="min-w-0 px-4 py-3">
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <span className="font-mono text-[12px] font-bold text-accent">{task.code}</span>
+                        <span className="min-w-0 text-[13.5px] font-semibold text-main [overflow-wrap:anywhere]">{task.title}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11.5px] text-faint">
+                        <span>{STATUS_LABEL[task.status] || task.status}</span>
+                        <span>{CATEGORY_LABEL[task.category] || task.category}</span>
+                        {task.buyer_name && <span>Баєр: {task.buyer_name}</span>}
+                        {task.telegram_topic_title && <span>Вітка: {task.telegram_topic_title}</span>}
+                        <span>Впала {kyivStamp(task.created_at)}</span>
+                        {task.completed_at && <span>Закрили {kyivStamp(task.completed_at)}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {selected && (
             <section className="panel p-4">
@@ -300,6 +480,34 @@ function Kpi({ label, value, hint, tone }: { label: string; value: number | stri
       <div className={cn("mt-1 font-mono text-[28px] font-bold", tone)}>{value}</div>
       <div className="mt-1 text-[11.5px] text-muted">{hint}</div>
     </div>
+  );
+}
+
+function CountButton({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      className={cn(
+        "cursor-pointer rounded px-1 font-semibold underline-offset-2 hover:underline",
+        active ? "bg-accent/15 text-accent" : "text-main",
+      )}
+    >
+      {label} {value}
+    </button>
   );
 }
 
