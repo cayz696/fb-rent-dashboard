@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { UserBadge } from "@/components/users/icon";
 import { Empty, ErrorNote, Input, PageHeader, Select } from "@/components/ui";
@@ -146,8 +147,7 @@ export default function StaffReportPage() {
     start.setDate(start.getDate() - 13);
     return start.toISOString().slice(0, 10);
   });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [drill, setDrill] = useState<{ personId: string | null; kind: StaffKind } | null>(null);
+  const [card, setCard] = useState<{ personId: string | null; kind: StaffKind } | null>(null);
   const [taskQuery, setTaskQuery] = useState("");
   const [taskCategory, setTaskCategory] = useState("");
 
@@ -155,16 +155,12 @@ export default function StaffReportPage() {
   const url = `/api/tasks/staff-report?date_from=${dateFrom}&date_to=${dateTo}`;
   const { data, error } = useSWR<StaffReport>(allowed ? url : null, fetcher, { keepPreviousData: true });
 
-  const selected = useMemo(
-    () => data?.people.find((person) => person.id === selectedId) ?? data?.people[0] ?? null,
-    [data, selectedId],
+  const cardPerson = useMemo(
+    () => data?.people.find((person) => person.id === card?.personId) ?? null,
+    [data, card],
   );
-  const drillPerson = useMemo(
-    () => data?.people.find((person) => person.id === drill?.personId) ?? null,
-    [data, drill],
-  );
-  const drillUrl = drill
-    ? `/api/tasks/staff-report/tasks?kind=${drill.kind}&date_from=${dateFrom}&date_to=${dateTo}&assignee_id=${drill.personId || "none"}`
+  const drillUrl = card
+    ? `/api/tasks/staff-report/tasks?kind=${card.kind}&date_from=${dateFrom}&date_to=${dateTo}&assignee_id=${card.personId || "none"}`
     : null;
   const { data: taskList, error: taskError } = useSWR<StaffTaskList>(allowed && drillUrl ? drillUrl : null, fetcher);
   const visibleTasks = useMemo(() => {
@@ -176,6 +172,15 @@ export default function StaffReportPage() {
       return blob.includes(query);
     });
   }, [taskList, taskQuery, taskCategory]);
+
+  useEffect(() => {
+    if (!card) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCard(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [card]);
 
   if (user && !allowed) {
     return (
@@ -199,11 +204,14 @@ export default function StaffReportPage() {
     setDateFrom(start.toISOString().slice(0, 10));
   }
 
-  function openDrill(personId: string | null, kind: StaffKind) {
-    setSelectedId(personId);
+  function openCard(personId: string | null, kind: StaffKind) {
     setTaskQuery("");
     setTaskCategory("");
-    setDrill((current) => (current?.personId === personId && current.kind === kind ? null : { personId, kind }));
+    setCard({ personId, kind });
+  }
+
+  function closeCard() {
+    setCard(null);
   }
 
   return (
@@ -275,12 +283,12 @@ export default function StaffReportPage() {
             <div className="border-b border-divider px-4 py-3">
               <h2 className="text-[15px] font-semibold text-main">По працівниках</h2>
               <p className="text-[12px] text-muted">
-                Нових — задачі, що з’явились у ці дати. Виконано — закриті в ці дати, навіть якщо задача прийшла раніше. Тому виконаних буває більше, ніж нових. Натисни цифру, щоб відкрити список.
+                Нових — задачі, що з’явились у ці дати. Виконано — закриті в ці дати, навіть якщо задача прийшла раніше. Натисни на людину, щоб відкрити її картку.
               </p>
             </div>
             <div className="divide-y divide-divider">
               {data.people.map((person) => {
-                const active = selected?.id === person.id;
+                const active = card?.personId === person.id;
                 const doneW = (person.done_period / maxLoad) * 100;
                 const openW = (person.open / maxLoad) * 100;
                 return (
@@ -288,9 +296,9 @@ export default function StaffReportPage() {
                     key={person.id || person.name}
                     role="button"
                     tabIndex={0}
-                    onClick={() => setSelectedId(person.id)}
+                    onClick={() => openCard(person.id, "done")}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") setSelectedId(person.id);
+                      if (event.key === "Enter" || event.key === " ") openCard(person.id, "done");
                     }}
                     className={cn("flex w-full cursor-pointer flex-col gap-2 px-4 py-3 text-left hover:bg-surface-hover", active && "bg-accent/5")}
                   >
@@ -302,27 +310,27 @@ export default function StaffReportPage() {
                           <CountButton
                             label="нових"
                             value={person.assigned_period}
-                            active={drill?.personId === person.id && drill.kind === "created"}
-                            onClick={() => openDrill(person.id, "created")}
+                            active={card?.personId === person.id && card.kind === "created"}
+                            onClick={() => openCard(person.id, "created")}
                           />
                           <CountButton
                             label="виконано"
                             value={person.done_period}
-                            active={drill?.personId === person.id && drill.kind === "done"}
-                            onClick={() => openDrill(person.id, "done")}
+                            active={card?.personId === person.id && card.kind === "done"}
+                            onClick={() => openCard(person.id, "done")}
                           />
                           <CountButton
                             label="висять"
                             value={person.open}
-                            active={drill?.personId === person.id && drill.kind === "open"}
-                            onClick={() => openDrill(person.id, "open")}
+                            active={card?.personId === person.id && card.kind === "open"}
+                            onClick={() => openCard(person.id, "open")}
                           />
                           {person.stuck > 0 && (
                             <CountButton
                               label="завислі"
                               value={person.stuck}
-                              active={drill?.personId === person.id && drill.kind === "stuck"}
-                              onClick={() => openDrill(person.id, "stuck")}
+                              active={card?.personId === person.id && card.kind === "stuck"}
+                              onClick={() => openCard(person.id, "stuck")}
                             />
                           )}
                         </div>
@@ -342,130 +350,139 @@ export default function StaffReportPage() {
             </div>
           </section>
 
-          {drill && (
-            <section className="panel mb-5 overflow-hidden">
-              <div className="border-b border-divider px-4 py-3">
-                <h2 className="text-[15px] font-semibold text-main">
-                  {KIND_LABEL[drill.kind]} · {drillPerson?.name || "Не призначено"}
-                </h2>
-                <p className="text-[12px] text-muted">
-                  {drill.kind === "open" || drill.kind === "stuck"
-                    ? "Це поточні задачі, дати періоду на них не впливають."
-                    : `За період ${dateFrom.split("-").reverse().join(".")}–${dateTo.split("-").reverse().join(".")}. Зміна дат зверху оновлює список.`}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-end gap-2 border-b border-divider px-4 py-3">
-                {(Object.keys(KIND_LABEL) as StaffKind[]).map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    onClick={() => setDrill({ personId: drill.personId, kind })}
-                    className={cn(
-                      "cursor-pointer rounded-full border px-3 py-1 text-[12px] font-semibold",
-                      drill.kind === kind ? "border-accent bg-accent text-on-accent" : "border-line-strong text-muted hover:text-main",
-                    )}
-                  >
-                    {KIND_LABEL[kind]}
+          {card && cardPerson && (
+            <div
+              className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) closeCard();
+              }}
+            >
+              <section role="dialog" aria-label={cardPerson.name} className="panel my-2 w-full max-w-4xl overflow-hidden">
+                <div className="flex items-start gap-3 border-b border-divider px-5 py-4">
+                  <UserBadge userId={cardPerson.id || cardPerson.name} icon={cardPerson.icon} size={22} />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="truncate text-[18px] font-semibold text-main">{cardPerson.name}</h2>
+                    <p className="text-[12px] text-muted">
+                      {dateFrom.split("-").reverse().join(".")}–{dateTo.split("-").reverse().join(".")}
+                      {" · "}нових {cardPerson.assigned_period} · виконано {cardPerson.done_period} · висять {cardPerson.open}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-[22px] font-bold text-main">{pct(cardPerson.success_rate)}</div>
+                    <div className="text-[10px] uppercase tracking-wider text-faint">успішність</div>
+                  </div>
+                  <button type="button" onClick={closeCard} aria-label="Закрити" className="cursor-pointer text-muted hover:text-main">
+                    <X size={18} />
                   </button>
-                ))}
-                <Select className="h-9 w-44" value={taskCategory} onChange={(event) => setTaskCategory(event.target.value)}>
-                  <option value="">Усі категорії</option>
-                  {Object.entries(CATEGORY_LABEL).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </Select>
-                <Input
-                  className="h-9 w-56"
-                  placeholder="Код, назва, байєр, вітка"
-                  value={taskQuery}
-                  onChange={(event) => setTaskQuery(event.target.value)}
-                />
-              </div>
-              {taskError && <ErrorNote>{(taskError as Error).message}</ErrorNote>}
-              {visibleTasks.length === 0 ? (
-                <div className="px-4 py-6">
-                  <Empty>{taskList ? "За цим фільтром задач немає." : "Завантажую задачі…"}</Empty>
                 </div>
-              ) : (
-                <div className="divide-y divide-divider">
-                  <div className="px-4 py-2 text-[11px] text-faint">
-                    Показано {visibleTasks.length} з {taskList?.total ?? visibleTasks.length}
-                  </div>
-                  {visibleTasks.map((task) => (
-                    <div key={task.id} className="min-w-0 px-4 py-3">
-                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className="font-mono text-[12px] font-bold text-accent">{task.code}</span>
-                        <span className="min-w-0 text-[13.5px] font-semibold text-main [overflow-wrap:anywhere]">{task.title}</span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11.5px] text-faint">
-                        <span>{STATUS_LABEL[task.status] || task.status}</span>
-                        <span>{CATEGORY_LABEL[task.category] || task.category}</span>
-                        {task.buyer_name && <span>Баєр: {task.buyer_name}</span>}
-                        {task.telegram_topic_title && <span>Вітка: {task.telegram_topic_title}</span>}
-                        <span>Впала {kyivStamp(task.created_at)}</span>
-                        {task.completed_at && <span>Закрили {kyivStamp(task.completed_at)}</span>}
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-2 px-5 py-4 sm:grid-cols-4">
+                  <Mini label="Вхідні" value={cardPerson.inbox} />
+                  <Mini label="До виконання" value={cardPerson.todo} />
+                  <Mini label="В роботі" value={cardPerson.in_progress} />
+                  <Mini label="На перевірці" value={cardPerson.review} />
+                  <Mini label="Термінові" value={cardPerson.urgent_open} />
+                  <Mini label="Понад 24 год" value={cardPerson.stuck} />
+                  <Mini label="Реакція" value={hoursLabel(cardPerson.median_reaction_hours)} />
+                  <Mini label="Час у роботі" value={hoursLabel(cardPerson.median_work_hours)} />
                 </div>
-              )}
-            </section>
-          )}
-
-          {selected && (
-            <section className="panel p-4">
-              <div className="mb-4 flex flex-wrap items-center gap-3">
-                <UserBadge userId={selected.id || selected.name} icon={selected.icon} size={18} />
-                <div>
-                  <h2 className="text-[16px] font-semibold text-main">{selected.name}</h2>
-                  <p className="text-[12px] text-muted">Деталі за обраний період і поточне навантаження.</p>
-                </div>
-              </div>
-              <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <Mini label="Вхідні" value={selected.inbox} />
-                <Mini label="До виконання" value={selected.todo} />
-                <Mini label="В роботі" value={selected.in_progress} />
-                <Mini label="На перевірці" value={selected.review} />
-                <Mini label="Термінові відкриті" value={selected.urgent_open} />
-                <Mini label="Висять понад 24 год" value={selected.stuck} />
-                <Mini label="Реакція" value={hoursLabel(selected.median_reaction_hours)} />
-                <Mini label="Час у роботі" value={hoursLabel(selected.median_work_hours)} />
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-faint">По категоріях</h3>
-                  {selected.categories.length === 0 ? (
-                    <p className="text-[12px] text-muted">За цей період категорій немає.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {selected.categories.map((cat) => (
-                        <div key={cat.category} className="flex items-center justify-between gap-3 text-[13px]">
-                          <span className="min-w-0 truncate text-main">{CATEGORY_LABEL[cat.category] || cat.category}</span>
-                          <span className="shrink-0 font-mono text-muted">відкрито {cat.open} · закрито {cat.done}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-faint">Закриття по днях</h3>
-                  <div className="flex h-24 items-end gap-1">
-                    {selected.daily_done.map((point) => {
-                      const max = Math.max(1, ...selected.daily_done.map((item) => item.count));
-                      const height = point.count ? Math.max(8, Math.round((point.count / max) * 100)) : 0;
-                      return (
-                        <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${point.date}: ${point.count}`}>
-                          <div className="flex h-16 w-full items-end">
-                            <div className="w-full rounded-t bg-emerald-400" style={{ height: `${height}%` }} />
+                <div className="grid gap-4 border-t border-divider px-5 py-4 lg:grid-cols-2">
+                  <div>
+                    <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-faint">По категоріях</h3>
+                    {cardPerson.categories.length === 0 ? (
+                      <p className="text-[12px] text-muted">За цей період категорій немає.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {cardPerson.categories.map((cat) => (
+                          <div key={cat.category} className="flex items-center justify-between gap-3 text-[13px]">
+                            <span className="min-w-0 truncate text-main">{CATEGORY_LABEL[cat.category] || cat.category}</span>
+                            <span className="shrink-0 font-mono text-muted">відкрито {cat.open} · закрито {cat.done}</span>
                           </div>
-                          <span className="text-[9px] text-faint">{dayLabel(point.date)}</span>
-                        </div>
-                      );
-                    })}
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-faint">Закриття по днях</h3>
+                    <div className="flex h-24 items-end gap-1">
+                      {cardPerson.daily_done.map((point) => {
+                        const max = Math.max(1, ...cardPerson.daily_done.map((item) => item.count));
+                        const height = point.count ? Math.max(8, Math.round((point.count / max) * 100)) : 0;
+                        return (
+                          <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${point.date}: ${point.count}`}>
+                            <div className="flex h-16 w-full items-end">
+                              <div className="w-full rounded-t bg-emerald-400" style={{ height: `${height}%` }} />
+                            </div>
+                            <span className="text-[9px] text-faint">{dayLabel(point.date)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
+                <div className="border-t border-divider px-5 py-3">
+                  <div className="flex flex-wrap items-end gap-2">
+                    {(Object.keys(KIND_LABEL) as StaffKind[]).map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => setCard({ personId: card.personId, kind })}
+                        className={cn(
+                          "cursor-pointer rounded-full border px-3 py-1 text-[12px] font-semibold",
+                          card.kind === kind ? "border-accent bg-accent text-on-accent" : "border-line-strong text-muted hover:text-main",
+                        )}
+                      >
+                        {KIND_LABEL[kind]}
+                      </button>
+                    ))}
+                    <Select className="h-9 w-44" value={taskCategory} onChange={(event) => setTaskCategory(event.target.value)}>
+                      <option value="">Усі категорії</option>
+                      {Object.entries(CATEGORY_LABEL).map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </Select>
+                    <Input
+                      className="h-9 w-56"
+                      placeholder="Код, назва, байєр, вітка"
+                      value={taskQuery}
+                      onChange={(event) => setTaskQuery(event.target.value)}
+                    />
+                  </div>
+                  <p className="mt-2 text-[12px] text-muted">
+                    {card.kind === "open" || card.kind === "stuck"
+                      ? "Це поточні задачі. Дати періоду на них не впливають."
+                      : "Список за дати, вибрані на сторінці."}
+                  </p>
+                </div>
+                {taskError && <ErrorNote>{(taskError as Error).message}</ErrorNote>}
+                {visibleTasks.length === 0 ? (
+                  <div className="px-5 py-6">
+                    <Empty>{taskList ? "За цим фільтром задач немає." : "Завантажую задачі…"}</Empty>
+                  </div>
+                ) : (
+                  <div className="max-h-80 divide-y divide-divider overflow-y-auto border-t border-divider">
+                    <div className="px-5 py-2 text-[11px] text-faint">
+                      Показано {visibleTasks.length} з {taskList?.total ?? visibleTasks.length}
+                    </div>
+                    {visibleTasks.map((task) => (
+                      <div key={task.id} className="min-w-0 px-5 py-3">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span className="font-mono text-[12px] font-bold text-accent">{task.code}</span>
+                          <span className="min-w-0 text-[13.5px] font-semibold text-main [overflow-wrap:anywhere]">{task.title}</span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11.5px] text-faint">
+                          <span>{STATUS_LABEL[task.status] || task.status}</span>
+                          <span>{CATEGORY_LABEL[task.category] || task.category}</span>
+                          {task.buyer_name && <span>Баєр: {task.buyer_name}</span>}
+                          {task.telegram_topic_title && <span>Вітка: {task.telegram_topic_title}</span>}
+                          <span>Впала {kyivStamp(task.created_at)}</span>
+                          {task.completed_at && <span>Закрили {kyivStamp(task.completed_at)}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
           )}
         </>
       )}
