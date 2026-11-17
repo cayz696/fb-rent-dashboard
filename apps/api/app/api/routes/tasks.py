@@ -59,6 +59,10 @@ class TaskCommentIn(BaseModel):
     text: str
 
 
+class MergeTaskIn(BaseModel):
+    into_id: uuid.UUID
+
+
 class TelegramGroupCreateIn(BaseModel):
     chat_id: int
     title: str
@@ -912,6 +916,48 @@ def convert_to_request(task_id: uuid.UUID, db: Session = Depends(get_db), user: 
         raise HTTPException(404, "Задачу не знайдено")
     req = telegram_tasks.convert_task_to_account_request(db, t, actor_of(user))
     return {"ok": True, "request_id": str(req.id), "proposed_count": len(req.proposed_account_ids or [])}
+
+
+@router.post("/{task_id}/merge")
+def merge_task(task_id: uuid.UUID, body: MergeTaskIn, db: Session = Depends(get_db), user: User = Depends(can_write)):
+    """Забирає дубль в уже відкриту задачу того самого байєра. Новіша картка зникає."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    source = db.get(TeamTask, task_id)
+    target = db.get(TeamTask, body.into_id)
+    if source is None or target is None:
+        raise HTTPException(404, "Задачу не знайдено")
+    if source.id == target.id:
+        raise HTTPException(400, "Задачу не можна злити саму в себе")
+    if target.status in ("done", "rejected"):
+        raise HTTPException(400, "Зливати можна тільки у відкриту задачу")
+
+    note = _preview_chat_text(source.title or source.code, limit=180)
+    comments = list(target.comments or [])
+    comments.append(
+        {
+            "id": str(uuid.uuid4())[:8],
+            "author": user.name,
+            "text": f"Сюди злито {source.code}: {note}",
+            "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        }
+    )
+    target.comments = comments
+    flag_modified(target, "comments")
+    extra = [item for item in (source.checklist or []) if isinstance(item, dict)]
+    if extra:
+        target.checklist = list(target.checklist or []) + extra
+        flag_modified(target, "checklist")
+    if target.buyer_id is None and source.buyer_id is not None:
+        target.buyer_id = source.buyer_id
+    if not target.telegram_topic_title and source.telegram_topic_title:
+        target.telegram_topic_id = source.telegram_topic_id
+        target.telegram_topic_title = source.telegram_topic_title
+    for row in db.scalars(select(TelegramMessageLog).where(TelegramMessageLog.task_id == source.id)).all():
+        row.task_id = target.id
+    db.delete(source)
+    db.commit()
+    return {"ok": True, "kept_id": str(target.id), "kept_code": target.code}
 
 
 @router.delete("/{task_id}")

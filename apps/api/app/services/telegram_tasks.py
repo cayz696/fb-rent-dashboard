@@ -890,8 +890,10 @@ def _open_followup_task(
     sender_username: Optional[str],
     category: str,
     reply_to_msg_id: Optional[int],
+    topic_id: Optional[int] = None,
+    buyer_id: Optional[uuid.UUID] = None,
 ) -> Optional[TeamTask]:
-    """Та сама людина в тому ж чаті не повинна отримувати другу задачу на кожне повідомлення."""
+    """Одна відкрита вітка байєра не має плодити другу задачу на кожне наступне прохання."""
     if reply_to_msg_id:
         replied = db.scalar(
             select(TelegramMessageLog).where(
@@ -903,23 +905,36 @@ def _open_followup_task(
             linked = db.get(TeamTask, replied.task_id)
             if linked and linked.status not in ("done", "rejected"):
                 return linked
-    sender = (sender_username or "").lstrip("@").lower()
-    if not sender:
-        return None
-    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2)
+    now = dt.datetime.now(dt.timezone.utc)
+    since = now - dt.timedelta(hours=12)
     candidates = db.scalars(
         select(TeamTask)
         .where(
             TeamTask.telegram_group_id == group.id,
-            TeamTask.category == (category or "general"),
             TeamTask.status.notin_(["done", "rejected"]),
             TeamTask.created_at >= since,
         )
         .order_by(TeamTask.created_at.desc())
     ).all()
+    topic = int(topic_id) if topic_id else None
     for task in candidates:
-        who = (task.telegram_sender or "").lower()
-        if sender in who:
+        if topic and task.telegram_topic_id == topic:
+            return task
+        if buyer_id and task.buyer_id == buyer_id:
+            return task
+    sender = (sender_username or "").lstrip("@").lower()
+    if not sender:
+        return None
+    sender_since = now - dt.timedelta(hours=2)
+    for task in candidates:
+        created = task.created_at
+        if created is not None and created.tzinfo is None:
+            created = created.replace(tzinfo=dt.timezone.utc)
+        if created is not None and created < sender_since:
+            continue
+        if task.telegram_topic_id or task.category != (category or "general"):
+            continue
+        if sender in (task.telegram_sender or "").lower():
             return task
     return None
 
@@ -930,7 +945,7 @@ def _attach_followup(task: TeamTask, sender_display: str, now: dt.datetime) -> N
         {
             "id": str(uuid.uuid4())[:8],
             "author": "ШІ-Диспетчер",
-            "text": f"Ще повідомлення від {sender_display} у тому ж діалозі. Окрему задачу не створено.",
+            "text": f"Ще прохання від {sender_display} у тій самій вітці. Окрему задачу не створено.",
             "created_at": now.isoformat(),
         }
     )
@@ -1077,12 +1092,15 @@ def ingest_message(
 
     created_task: Optional[TeamTask] = None
     if should_create:
+        topic_buyer = _buyer_from_topic(db, topic_title, group.team_id)
         followup = _open_followup_task(
             db,
             group,
             sender_username,
             str(ai_result.get("category") or "general"),
             reply_to_msg_id,
+            topic_id=topic_id,
+            buyer_id=topic_buyer.id if topic_buyer else None,
         )
         if followup is not None and not force_create_task:
             _attach_followup(followup, sender_display, now)

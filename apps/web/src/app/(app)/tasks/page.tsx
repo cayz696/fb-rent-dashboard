@@ -142,6 +142,23 @@ const SAMPLE_PROMPTS = [
   },
 ];
 
+function openTwin(task: TeamTaskItem, tasks: TeamTaskItem[]): TeamTaskItem | null {
+  const here = Date.parse(task.created_at);
+  const related = tasks.filter((other) => {
+    if (other.id === task.id || other.status === "done" || other.status === "rejected") return false;
+    const sameBuyer = Boolean(task.buyer_id && other.buyer_id === task.buyer_id);
+    const sameTopic = Boolean(
+      task.telegram_topic_id &&
+        other.telegram_topic_id === task.telegram_topic_id &&
+        other.telegram_group_id === task.telegram_group_id,
+    );
+    if (!sameBuyer && !sameTopic) return false;
+    return Math.abs(Date.parse(other.created_at) - here) <= 24 * 3600 * 1000;
+  });
+  related.sort((a, b) => Math.abs(Date.parse(a.created_at) - here) - Math.abs(Date.parse(b.created_at) - here));
+  return related[0] ?? null;
+}
+
 export default function TasksPage() {
   const { user } = useMe();
   const router = useRouter();
@@ -298,6 +315,18 @@ export default function TasksPage() {
       });
       setDragError((e as Error).message);
     }
+  }
+
+  async function mergeWithTwin(task: TeamTaskItem, twin: TeamTaskItem) {
+    const taskTime = Date.parse(task.created_at);
+    const twinTime = Date.parse(twin.created_at);
+    const keep = taskTime <= twinTime ? task : twin;
+    const drop = keep.id === task.id ? twin : task;
+    const ok = window.confirm(`Злити ${drop.code} у ${keep.code}? Новіша картка зникне, її назва лишиться коментарем у старшій.`);
+    if (!ok) return;
+    await api(`/tasks/${drop.id}/merge`, { method: "POST", body: { into_id: keep.id } });
+    if (selectedTaskId === drop.id) setSelectedTaskId(keep.id);
+    mutate();
   }
 
   async function quickAssignChange(task: TeamTaskItem, assigneeId: string) {
@@ -1249,6 +1278,23 @@ export default function TasksPage() {
                                   Вітка: {task.telegram_topic_title}
                                 </div>
                               )}
+                              {editable && (() => {
+                                const twin = openTwin(task, allTasks);
+                                if (!twin) return null;
+                                return (
+                                  <button
+                                    type="button"
+                                    data-no-drag
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      mergeWithTwin(task, twin).catch((err) => setDragError((err as Error).message));
+                                    }}
+                                    className="cursor-pointer truncate text-left text-[12px] font-semibold text-amber-300 underline-offset-2 hover:underline"
+                                  >
+                                    Та сама вітка, що {twin.code}. Злити в одну
+                                  </button>
+                                );
+                              })()}
                               {task.telegram_chat_title && (
                                 <div className="flex items-center justify-between text-[11px] text-faint">
                                   <span className="truncate">💬 {task.telegram_chat_title}</span>
